@@ -1,7 +1,5 @@
 #include "mbed.h"
 
-
-
 // #define 
 SPI spi(PF_9, PF_8, PF_7); // mosi, miso, sclk
 DigitalOut cs(PC_1);
