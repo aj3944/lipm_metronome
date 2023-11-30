@@ -78,7 +78,7 @@ float goal_position = 0.;
 
 void move_servo(float goal_delta){
     // for(float p=0; p<1.0; p += 0.1) {
-      // goal_position += goal_delta;
+      goal_position += goal_delta;
       myservo.position(goal_delta);
 
       printf("<<<SERVO MOVED TO %2.2f>>>\n",goal_position);
@@ -166,6 +166,7 @@ int main()
 
     float z_position = 0.5;
     float error = 0.0;
+    float error_prev = 0.0;
     float error_I = 0.0;
     float error_D = 0.0;
     // complex
@@ -197,28 +198,42 @@ int main()
       gy=((float)raw_gy)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
       gz=((float)raw_gz)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
       // printf("Actual|\tgx: %4.5f \t gy: %4.5f \t gz: %4.5f\n",gx,gy,gz);
+      if( gz > 0.001 ) 
+      z_position += gz;
 
-      z_position += gz*180/PI;
-
-      printf("\t>GZ:%4.5f\n",gz);
-      printf("\t>ZPOS:%4.5f\n",z_position);
+      printf("\t\t\t\t>GZ:%4.5f\n",gz);
+      printf("\t\t\t\t>ZPOS:%4.5f\n",z_position);
       
       // if( gz > 0.01 || 1){
       //   // printf("\t\t\tGZ|\tposition: %4.5f \n",gz);
       // }
 
       error = 0.5 - z_position;
-      printf("\t\t error_b>:%4.5f\n",error);
+
+      error_I += error; 
+      error_D = z_position; 
+      printf("\t\t\t\t\t\t>prev_e:%4.5f\n",error_prev);
 
 
 
-      float p = 2.5,i = 10, d =6;
-      if(error*error > 0.001){
-        float delta = error;
-        error -= delta;
-        printf("\t\t deltaL>:%4.5f\n",delta);
-        printf("\t\t error>:%4.5f\n",error);
-        move_servo(delta);
+      float p = -2.4,i = -2.4, d = -2.4;
+      if(error*error > 0.01){
+        float P = error*p,I = error_I*i, D = error_D*d;
+        printf("\t\t\t\t\t\t\t\t >P:%4.5f\n",P);
+        printf("\t\t\t\t\t\t\t\t\t >I:%4.5f\n",I);
+        printf("\t\t\t\t\t\t\t\t\t\t >D:%4.5f\n",D);
+        float delta = P + I + D;
+        error += delta;
+        printf("\t\t\t\t\t\t>delta:%4.5f\n",delta);
+        printf("\t\t\t\t\t\t>error:%4.5f\n",error);
+        move_servo(-delta);
+        error_prev = error;
+        z_position -= delta;
+      }
+      else{
+        error_I = 0.;
+        error_D = 0.;
+        z_position = 0.5;
       }
 
 
