@@ -27,6 +27,48 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 
 #define SPI_FLAG 1
 
+#define CAN_RX                      PB_12
+#define CAN_TX                      PB_13
+#define CAN_DATA_RATE               500000
+
+
+
+
+CAN can(CAN_RX, CAN_TX, CAN_DATA_RATE);  
+CANMessage       rxMsg;
+Thread thread;
+
+
+void printMsg(CANMessage& msg){
+  if(!msg.id){
+    return;
+  }
+  printf("  ID      = 0x%.3x\r\n", msg.id);
+  printf("  Type    = %d\r\n", msg.type);
+  printf("  Format  = %d\r\n", msg.format);
+  printf("  Length  = %d\r\n", msg.len);
+  printf("  Data    =");
+  for(int i = 0; i < msg.len; i++)
+      printf(" 0x%.2X", msg.data[i]);
+  printf("\r\n");
+
+}
+void can_handler() {
+    while(1){
+      can.read(rxMsg);
+      if(can.rderror()){
+          printf("\ncan error\n");
+          can.reset();
+      }else{
+          printMsg(rxMsg);           
+      } 
+      // printf("can ping\n");          
+    }
+}
+
+
+
+
 uint8_t write_buf[32]; 
 uint8_t read_buf[32];
 
@@ -84,6 +126,10 @@ int main()
 {
     spi.format(8,3);
     spi.frequency(1'000'000);
+
+    thread.start(can_handler);
+
+    myservo.calibrate(0.005,150);
 
     write_buf[0]=CTRL_REG1;
     write_buf[1]=CTRL_REG1_CONFIG;
@@ -167,6 +213,30 @@ int main()
       gy=((float)raw_gy)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
       gz=((float)raw_gz)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
       // printf("Actual|\tgx: %4.5f \t gy: %4.5f \t gz: %4.5f\n",gx,gy,gz);
+
+      z_position += gz*180/PI;
+
+      // printf("\t>GZ:%4.5f\n",gz);
+      // printf("\t>ZPOS:%4.5f\n",z_position);
+      
+      // if( gz > 0.01 || 1){
+      //   // printf("\t\t\tGZ|\tposition: %4.5f \n",gz);
+      // }
+
+      error = 0.5 - z_position;
+      // printf("\t\t error_b>:%4.5f\n",error);
+
+
+
+      // float p = 2.5,i = 10, d =6;
+      // if(error*error > 0.001){
+      //   float delta = error;
+      //   error -= delta;
+      //   printf("\t\t deltaL>:%4.5f\n",delta);
+      //   printf("\t\t error>:%4.5f\n",error);
+      //   move_servo(delta);
+      // }
+
 
       out_xyz[0] = gx;
       out_xyz[1] = gy;
