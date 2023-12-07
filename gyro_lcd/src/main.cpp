@@ -1,6 +1,9 @@
 #include "mbed.h"
 #include "../lib/LCD_DISCO/LCD_DISCO_F429ZI.h"
 
+#define PI  3.14159265358979323846 
+#define EPSILON 0.000001
+
 SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 
 //address of first register with gyro data
@@ -27,6 +30,9 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 
 #define SPI_FLAG 1
 
+#define BUF_LEN 100
+
+
 uint8_t write_buf[32]; 
 uint8_t read_buf[32];
 
@@ -52,7 +58,12 @@ int graph_sector( int val, int axis){
   return 20 + 50 + axis*100 + dx;
 }
 
-
+void make_filter(float coeff_array[]){
+  for(int i = 0; i < BUF_LEN; i ++){
+    float del_t = (2*PI*(float)i/10);
+    coeff_array[i] = sin(del_t)/(PI *(del_t + EPSILON));
+  }
+}
 
 // int graph_sector( int val, int axis){
 //   int dx = val/15;
@@ -110,25 +121,23 @@ int main()
     int out_vals[6];
     float out_xyz[3];
 
+    float circular_buffer[BUF_LEN][3] = { 0 };
+    float coeff_filter[BUF_LEN] = { 0 };
+
+    make_filter(coeff_filter);
 
 
     float last_sane_xyz[3] = { 0 };
-    float smooth_xyz[3] = { 0 };
-    float normal_xyz[3] = { 0 };
-    float avg_xyz[240][3] = { 0 };
+    float avg_xyz[BUF_LEN][3] = { 0 };
     int t = 0;
-    int rs = 10;
 
-    int freq_max = 120;
 
 
     // lcd_clear();
 
-    int norm_freq;
     int val;
 
 
-    double ang_veloc = 0.0;
 
     for(int i = 0; i < 3; i++){
       if(i==0)     lcd.SetTextColor(LCD_COLOR_RED);
@@ -141,7 +150,9 @@ int main()
     // complex
     while(1)
     {
-      t = t%235 + 1;
+      t = t%BUF_LEN + 1;
+      make_filter(coeff_filter);
+      printf(">coeff:%4.5f\n>buf:%4.5f\n",coeff_filter[t-1],circular_buffer[t-1][0]);
 
       if(t == 1){
         lcd_clear();
@@ -166,7 +177,7 @@ int main()
       gx=((float)raw_gx)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
       gy=((float)raw_gy)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
       gz=((float)raw_gz)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
-      // printf("Actual|\tgx: %4.5f \t gy: %4.5f \t gz: %4.5f\n",gx,gy,gz);
+      printf(">gx:%4.5f\n>gy:%4.5f\n>gz:%4.5f\n",gx,gy,gz);
 
       out_xyz[0] = gx;
       out_xyz[1] = gy;
@@ -176,10 +187,15 @@ int main()
         // last_sane_xyz[i] = out_xyz[i];
         // smooth_xyz[i] = (rs - 1)* smooth_xyz[i]/(rs) + last_sane_xyz[i]/(rs);
         // normal_xyz[i] = last_sane_xyz[i] - smooth_xyz[i];
-        normal_xyz[i] = out_xyz[i];
-        val = avg_xyz[t-1][i]/2 + normal_xyz[i]/2;
-        avg_xyz[t][i] = val;
+        circular_buffer[t][i] = out_xyz[i];
+        // normal_xyz[i] = out_xyz[i];
+        val = 0;
+        for(int j = 0; j < BUF_LEN; j++){
+          val += circular_buffer[t+j][i]*coeff_filter[j];
+        }
+        avg_xyz[t][i] = val*100;
       }
+      printf(">fx:%4.9f\n>fy:%4.9f\n>fz:%4.9f\n",avg_xyz[t][0],avg_xyz[t][1],avg_xyz[t][2]);
 
       for(int i = 0 ; i < 3; i++){
         lcd.DrawLine(t-1,graph_sector(avg_xyz[t-1][i]*100,i),t,graph_sector(avg_xyz[t][i]*100,i)+1);
