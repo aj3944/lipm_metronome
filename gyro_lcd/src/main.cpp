@@ -38,29 +38,38 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 
 //address of first register with gyro data
 #define OUT_X_L 0x28
+
+//Location of Reference register
 #define REFERENCE 0x25
 
 //register fields(bits): data_rate(2),Bandwidth(2),Power_down(1),Zen(1),Yen(1),Xen(1)
 #define CTRL_REG1 0x20
 
 //configuration: 200Hz ODR,50Hz cutoff, Power on, Z on, Y on, X on
+//DR=01 , BW=10 --> 190Hz (190 readings per second) and 50Hz Cutoff (Is this the recognized rate of change in w readings) , PD=1 , Zen=1 , Xen=1 , Yen=1
 #define CTRL_REG1_CONFIG 0b01'10'1'1'1'1
 
 //register fields(bits): data_rate(2),Bandwidth(2),Power_down(1),Zen(1),Yen(1),Xen(1)
 #define CTRL_REG2 0x21
 
-//configuration: 200Hz ODR,50Hz cutoff, Power on, Z on, Y on, X on
+//configuration: Reserved=00 , HPM = 00 (Normal Mode Reset Filter), HPCF=0111 (at ODR=190 then cutoff = 0.09 Hz)
 #define CTRL_REG2_CONFIG 0b00'00'0'1'1'1
 
 //register fields(bits): reserved(1), endian-ness(1),Full scale sel(2), reserved(1),self-test(2), SPI mode(1)
 #define CTRL_REG4 0x23
 
 //configuration: reserved,little endian,500 dps,reserved,disabled,4-wire mode
-#define CTRL_REG4_CONFIG 0b0'0'01'0'00'0
+// Block Data Update = 0 (Continous value) , BLE = 0 LSB data at Lower Address , FS=01 (500 DPS) , Registered = 0 , Fixed = 00 , SIM = 0 (SPI interface Mode Selection = 4-Wire interface)  
+//#define CTRL_REG4_CONFIG 0b0'0'01'0'00'0
+#define CTRL_REG4_CONFIG 0b0'0'11'0'00'0
 
 #define SPI_FLAG 1
 
-#define BUF_LEN 100
+//#define BUF_LEN 100
+
+
+//#include "Teleplot.h"
+//Teleplot teleplot("127.0.0.1");
 
 
 uint8_t write_buf[32]; 
@@ -117,16 +126,16 @@ void printArr2d(float *a, int8_t k1, int8_t k2){ //k1 row, k2 col
 
 float dotProduct2(float *an, float *bn, int8_t f, int8_t dim){
     bool debug=1;
-    if (debug) printf("Start dotProduct============\n");
+    //if (debug) printf("Start dotProduct============\n");
     int8_t i=0;
     float r=0;
     for (i=0 ; i<f; i++){
         r= r + *(an+dim*i) * *(bn+dim*i);
-        if (debug) printf("dotI\t[%d]\t a=%4.5f\t b=%4.5f \ta=%p\t b=%p \n",i,*(an+dim*i),an+dim*i,*(bn+dim*i),an+dim*i,bn+dim*i);
+        //if (debug) printf("dotI\t[%d]\t a=%4.5f\t b=%4.5f \ta=%p\t b=%p \n",i,*(an+dim*i),an+dim*i,*(bn+dim*i),an+dim*i,bn+dim*i);
         
     }
-    if (debug) printf("r=%4.5f\n",r);
-    if (debug) printf("End dotProduct============\n");
+    //if (debug) printf("r=%4.5f\n",r);
+    //if (debug) printf("End dotProduct============\n");
     return r;
     
 }
@@ -138,15 +147,15 @@ void crossProduct3d(float *an, float *vn){
     //float az=*(an+2);
     //printf("A1=%f \t %f \t %f \n",ax,ay,az);
 
-    printf("Start Crossproduct====\n");
+    //printf("Start Crossproduct====\n");
     *(vn) =   (*(an+1)) * zdim - (*(an+2)) * ydim;
     *(vn+1) = (*(an+2)) * xdim - (*(an))   * zdim;
     *(vn+2) = (*(an))   * ydim - (*(an+1)) * xdim;
 
-    printf("A1 Ads = %p \t %p \t %p \n", an , an+1 , an+2);
-    printf("A1 = [%f \t %f \t %f] \n", *(an) , *(an+1) , *(an+2));
-    printf("Cross Product V = [%f \t %f \t %f] \n",*(vn),*(vn+1),*(vn+2));
-    printf("End Crossproduct====\n");
+    //printf("A1 Ads = %p \t %p \t %p \n", an , an+1 , an+2);
+    //printf("A1 = [%f \t %f \t %f] \n", *(an) , *(an+1) , *(an+2));
+    //printf("Cross Product V = [%f \t %f \t %f] \n",*(vn),*(vn+1),*(vn+2));
+    //printf("End Crossproduct====\n");
 }
 
 
@@ -191,7 +200,7 @@ void blackmanWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
         for (j=0; j<3 ; j++){
             for (i=0 ; i<f ; i++){
                 arr[i][j]=(float) 0.42 - 0.5*cos(2*3.14*i/(f-1)) + 0.08*cos(4*3.14*i/(f-1));
-                printf("bi=%f \n",0.42 - 0.5*cos(2*3.14*i/(f-1)) + 0.08*cos(4*3.14*i/(f-1)));
+                //printf("bi=%f \n",0.42 - 0.5*cos(2*3.14*i/(f-1)) + 0.08*cos(4*3.14*i/(f-1)));
         }
     }
 }
@@ -275,8 +284,9 @@ int main()
     spi.transfer(write_buf,2,read_buf,2,spi_cb,SPI_EVENT_COMPLETE );
     flags.wait_all(SPI_FLAG); 
 
-
+    // write to reference register , then 1100, xplain ?
     write_buf[0]=REFERENCE|0x80|0x40;
+    
     //start sequential sample reading
     spi.transfer(write_buf,7,read_buf,7,spi_cb,SPI_EVENT_COMPLETE );
     flags.wait_all(SPI_FLAG);
@@ -292,6 +302,10 @@ int main()
       if(i==2)     lcd.SetTextColor(LCD_COLOR_BLUE);
       lcd.DrawRect(0, 20+(i)*100, 239, 100*(i+1)); 
     }
+
+    time_t seconds = time(NULL);
+    time_t tr;
+    time(&tr);
 
     float gyro[d][M] = {0}; //initialie gyro buffer
     //float gyro[M][d] = {0}; //initialie gyro buffer
@@ -325,6 +339,10 @@ int main()
 
     int8_t w=0, r=(M+w-D)%M , v=0;
     //int8_t r1=(M-D1)%M;
+    //set_time(1256729737);  // Set RTC time to Wed, 28 Oct 2009 11:35:37
+    struct tm *current_time;
+    current_time = localtime(&seconds);
+    time_t now=time(0);
 
     printf("Start \n");
     
@@ -386,25 +404,30 @@ int main()
       for (j=0 ; j<d ; j++){
         //gyro[j][w]=i; //write op
         gyroRead[j][w] = ( ( (uint16_t)read_buf[2*j+1+1] ) <<8 ) | ( (uint16_t)read_buf[2*j+1] );
-        gyro[j][w] = ((float) gyroRead[j][w])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
+        if (gyroRead[j][w] <= 1700 && gyroRead[j][w] >= -1700) {continue;}
+        //gyro[j][w] = ((float) gyroRead[j][w])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
+        gyro[j][w] = ((float) gyroRead[j][w])*(17.5f*0.017453292519943295769236907684886f) ;
+        current_time = localtime(&seconds);
+        //printf("time= %d:%d:%d\t, localtime=%s\t t=%d\t, w=%d\t, r=%d\t,  j=%d\t, gyroRead[%d][%d]=%d\t, gyro[%d][%d]=%f \n", current_time->tm_hour , current_time->tm_min, current_time->tm_sec ,current_time, t, w ,r  , j ,    w,j, gyroRead[w][j],     w,j ,gyro[w][j]);
+        printf("w=%d\t, r=%d\t,  j=%d\t, gRead[%d][%d]=%d\t, gyro[%d][%d]=%f \n",  w ,r  , j ,    w,j, gyroRead[w][j],     w,j ,gyro[w][j]);
 
+        //printf(">input \n t=%d \ti=%d \tj=%d \tw=%d \t r=%d \t v=%d \tgyro[%d][%d]=%f\n", t,i,j,w,r,v,w,j,j,gyro[w][j] );
 
-        printf(">input \n t=%d \ti=%d \tj=%d \tw=%d \t r=%d \t v=%d \tgyro[%d][%d]=%f\n", t,i,j,w,r,v,w,j,j,gyro[w][j] );
-
+        /*
         //Start Signal Prep block
         v=D1;
-        printf("===Start Prep\n");
+        //printf("===Start Prep\n");
         for (k=r+(D-D1) ; k < r+(D-D1)+F1 ; k++ ){
             a1[v][j]=gyro[k%M][j];
-            printf("w=%d \tr=%d \tk=%d \tk%M=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a1[%d][%d]=%4.2f \t gyro[%d][%d]=%4.2f \t ads=%p\n", w, r,k,k%M, (D-D1) ,v ,D,D1,v,j ,a1[v][j],    k%M , j, gyro[k%M][j] , &a1[k][j]);
+            //printf("w=%d \tr=%d \tk=%d \tk%M=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a1[%d][%d]=%4.2f \t gyro[%d][%d]=%4.2f \t ads=%p\n", w, r,k,k%M, (D-D1) ,v ,D,D1,v,j ,a1[v][j],    k%M , j, gyro[k%M][j] , &a1[k][j]);
             v=v-1;
         }
-        printf("===End Prep\n");
-        printf("===Start Filtered\n");
+        //printf("===End Prep\n");
+        //printf("===Start Filtered\n");
         g1[w][j]= dotProduct2(&a1[0][j], &H1[0][j],F1,d); //*Delta2 
         //printf(">i=%d \t w=%d \t r1=%d \t r1+(D1-D1)=%d \t g2[%d][%d]=%f \n",i, w,r1,r1+(D1-D2), w,j,g3[w][j]);
-        printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg1[%d][%d]=%f ads=%p\n", w, r, (D-D1) , r+(D-D1),w ,j ,g1[w][j], &g1[w][j]    );
-        printf("===End Filtered\n");
+        //printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg1[%d][%d]=%f ads=%p\n", w, r, (D-D1) , r+(D-D1),w ,j ,g1[w][j], &g1[w][j]    );
+        //printf("===End Filtered\n");
         //End Signal Prop Block
         
         /*
@@ -441,21 +464,23 @@ int main()
         //End Signal Prop Block
         */
 
-    printf("==End Read Gyro dim \n");
+    //printf("==End Read Gyro dim \n");
     }
     
+    /*
     //Section to calculate values based on the 3 existing 
     if (d==3) {
         crossProduct3d(&gyro[w][0] , &V[w][0]);
-        /*
+        
         V[w][0] = gyro[w][1] * zdim - gyro[w][2] * ydim ;
         V[w][1] = gyro[w][2] * xdim - gyro[w][0] * zdim ;
         V[w][2] = gyro[w][0] * ydim - gyro[w][1] * xdim ;
-        */
+        
         
     }
     else if (d==2) {V[w][0] =gyro[w][0]*ydim ; V[w][1] = gyro[w][1]*xdim ; }
     else { V[w][0] = gyro[w][0]*xdim ; }
+    
 
     //Calculate Veloicity
     //float vL2=0;
@@ -464,36 +489,37 @@ int main()
         vL2=vL2+pow(V[w][j],2);
     }
     VLinear[w][0]=sqrt(vL2);
-    printf("VLinear[%d][0] = %f \n", w, VLinear[w][0]);
-    printArr2d(&VLinear[0][0], M,d); //filtered
+    //printf("VLinear[%d][0] = %f \n", w, VLinear[w][0]);
+    //printArr2d(&VLinear[0][0], M,d); //filtered
     //Integrator based on trapezoidal
     v=DL;
-    printf("===Start Final Processing\n");
+    //printf("===Start Final Processing\n");
     for (k=r+(D-DL) ; k < r+(D-DL)+FL ; k++ ){
         aL[v][0]=VLinear[k%M][0];
-        printf("k=%d \n",k);
-        printf("w=%d \tr=%d \tk=%d \tk%M=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, aL[%d][0]=%4.2f \t vLinear[%d][0]=%4.2f \t ads=%p\n", w, r,k,k%M, (D-DL) ,v ,D,DL,v ,aL[v][0],    k%M , VLinear[k%M][0] , &aL[v][0]);
+        //printf("k=%d \n",k);
+        //printf("w=%d \tr=%d \tk=%d \tk%M=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, aL[%d][0]=%4.2f \t vLinear[%d][0]=%4.2f \t ads=%p\n", w, r,k,k%M, (D-DL) ,v ,D,DL,v ,aL[v][0],    k%M , VLinear[k%M][0] , &aL[v][0]);
         v=v-1;
     }
     gL[w][0]= dotProduct2(&aL[0][0], &HL[0][0],F2,1); //*Delta2 
-    printf("Distance w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tgL[%d]=%f ads=%p\n", w, r, (D-DL) , r+(D-DL),w  ,gL[w][0], &gL[w][0]    );
+    //printf("Distance w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tgL[%d]=%f ads=%p\n", w, r, (D-DL) , r+(D-DL),w  ,gL[w][0], &gL[w][0]    );
     L=L+gL[w][0];
-    printf("Total Distance=%f \n",L);
+    //printf("Total Distance=%f \n",L);
+    
 
-
     
     
     
-    
+    */    
     //Increment Pointers
     w=(w+1)%M;
     r=(r+1)%M;
     t=t+1;
-    printf("==End Read Gyro XYZ \n");
 
     thread_sleep_for(50);
     if((t%M) == 0){
         lcd_clear();
     }
 
-}}
+  }
+
+}
