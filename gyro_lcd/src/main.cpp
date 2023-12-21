@@ -10,21 +10,21 @@
 #define zdim 1
 
 #define d 3 //number of dimentions in the Gyroscope
-#define M 16 //Buffer Length, number of samples in buffer per x-axis, M practically  M<N
+#define M 200 //Buffer Length, number of samples in buffer per x-axis, M practically  M<N
 
 //Use Only in Debugging
 #define N 7  //number of readings provided by gyro per x-axis = inf/d
 #define inf ((N)*1) //number of samples taken from gyro, should be infinity
 //
-
+ 
 #define D (M-1) //Supported Delay Lines
 #define F (M) //Supported Filter Coefficients
 
 #define Tdelay (0.5/M) //For Testing
 #define Ts2 Tdelay //For Testing
 
-#define xHThreshold 500
-#define xLThreshold -500
+#define xHThreshold 10
+#define xLThreshold -10
 
 #define F1 (M) //Filter coefficients, n Delays + 1 current, F <=M , Fmax=M
 #define D1 (F1-1) //Filter Order, Number of delay line samples, D=F-1 , Dmax = M-1, D<=M-1, this is for the Filter delay
@@ -41,6 +41,8 @@
 
 
 SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
+InterruptIn int1(PA_1,PullDown);
+InterruptIn int2(PA_2,PullDown);
 
 //address of first register with gyro data
 #define OUT_X_L 0x28
@@ -52,17 +54,77 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 #define CTRL_REG1 0x20
 
 //configuration: 200Hz ODR,50Hz cutoff, Power on, Z on, Y on, X on
-//DR=01 , BW=10 --> 190Hz (190 readings per second) and 50Hz Cutoff (Is this the recognized rate of change in w readings) , PD=1 , Zen=1 , Xen=1 , Yen=1
-#define CTRL_REG1_CONFIG 0b01'10'1'1'1'1
+//DR=01 , BW=10 --> 100Hz (100 readings per second) and 12.5Hz Cutoff (Is this the recognized rate of change in w readings) , PD=1 , Zen=1 , Xen=1 , Yen=1
+#define CTRL_REG1_CONFIG 0b01'00'1'0'0'1
 
-//register fields(bits): data_rate(2),Bandwidth(2),Power_down(1),Zen(1),Yen(1),Xen(1)
+//register fields(bits): 00(2),HPM_MODE(2),CUTOFF(4)
 #define CTRL_REG2 0x21
 
 //configuration: Reserved=00 , HPM = 00 (Normal Mode Reset Filter), HPCF=0111 (at ODR=190 then cutoff = 0.09 Hz)
-#define CTRL_REG2_CONFIG 0b00'00'0'1'1'1
+#define CTRL_REG2_CONFIG 0b00'00'0'0'0'0
 
-//register fields(bits): reserved(1), endian-ness(1),Full scale sel(2), reserved(1),self-test(2), SPI mode(1)
+//register fields(bits): I1_Int1 (1), I1_Boot(1), H_Lactive(1), PP_OD(1), I2_DRDY(1), I2_WTM(1), I2_ORun(1), I2_Empty(1)
+#define CTRL_REG3 0x22
+
+//configuration: Int1 disabled, Boot status disabled, active high interrupts, push-pull, enable Int2 data ready, disable fifo interru
+#define CTRL_REG3_CONFIG 0b10'00'1'0'0'0
+
+
+//register fields(bits): 00(2),HPM_MODE(2),CUTOFF(4)
 #define CTRL_REG4 0x23
+
+//configuration: reserved,little endian,500 dps,reserved,disabled,4-wire mode
+#define CTRL_REG4_CONFIG 0b0'0'01'0'00'0
+
+
+// BOOT(1)-FIFO_EN(1)-(1)-HPen(1)-INT1_Sel1(1)-INT1_Sel0(1)-Out_Sel1(1)-Out_Sel0(1)
+#define CTRL_REG5 0x24
+
+//FIFO EN //hpass en //INT HPASS AND LOW PASS
+#define CTRL_REG5_CONFIG 0b01'01'1'0'1'0
+
+// BOOT(1)-FIFO_EN(1)-(1)-HPen(1)-INT1_Sel1(1)-INT1_Sel0(1)-Out_Sel1(1)-Out_Sel0(1)
+#define REFERENCE 0x25
+#define OUT_TEMP 0x26
+#define STATUS_REG 0x27
+#define FIFO_CTRL_REG 0x27
+#define FIFO_CTRL_CONFIG 0b00'11'1'0'1'0
+
+
+#define FIFO_CTRL_REG 0x2e
+#define FIFO_CTRL_CONFIG 0b00'11'1'0'1'0
+
+
+#define FIFO_CTRL_REG 0x2f
+// #define FIFO_CTRL_CONFIG 0b00'11'1'0'1'0
+
+#define INT1_CFG 0x30
+#define INT1_CFG_CONFIG 0b01'00'0'0'1'0
+
+
+#define INT1_SRC 0x31
+
+
+#define INT1_THS_XH 0x32
+#define INT1_THS_XH_CONFIG 0b00'00'1'0'0'0
+#define INT1_THS_XL 0x33
+#define INT1_THS_XH_CONFIG 0b00'00'0'1'0'0
+
+#define INT1_THS_YH 0x34
+#define INT1_THS_YL 0x35
+
+#define INT1_THS_ZH 0x36
+#define INT1_THS_ZL 0x37
+
+
+#define INT1_DURATION 0x38
+#define INT1_DURATION_CONFIG 0b10'00'0'1'0'0
+
+
+
+
+
+// #define CTRL_REG4 0x23
 
 //configuration: reserved,little endian,500 dps,reserved,disabled,4-wire mode
 // Block Data Update = 0 (Continous value) , BLE = 0 LSB data at Lower Address , FS=01 (500 DPS) , Registered = 0 , Fixed = 00 , SIM = 0 (SPI interface Mode Selection = 4-Wire interface)
@@ -72,6 +134,7 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 #define CTRL_REG4_CONFIG 0b0'0'11'0'00'0
 
 #define SPI_FLAG 1
+#define DATA_READY_FLAG 2
 
 static const bool debugSwitch=0;
 static const bool debugSwitch2=0;
@@ -90,6 +153,13 @@ void spi_cb(int event){
 }
 
 LCD_DISCO_F429ZI lcd;
+
+void data_cb(){
+  flags.set(DATA_READY_FLAG);
+};
+
+
+// int1.rise(&data_cb);
 
 
 // convert values from +/- 500 to LCD compatible per axis.
@@ -289,31 +359,49 @@ void unitWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
     }
 }
 
+
+long long int FACT_ARRAY[M];
+
+
 /// @brief RETURN A FACTORIAL
 /// @param f SIZE
 /// @param dim DIMENTIONS
 /// @param arr ARRAY
-int factorial(uint16_t *n){
-    uint16_t i=0, fact=1;
-    for(i=1 ; i<=*n ; i++){
-      fact=fact*i;
+long long int factorial(uint16_t *n){
+    if(!FACT_ARRAY[*n] == 0){
+        uint16_t i=0, fact=1;
+        for(i=1 ; i<=*n ; i++){
+        fact=fact*i;
+        }
+        FACT_ARRAY[*n] = fact;
+        return fact;
+    }else{
+        return FACT_ARRAY[*n];
     }
-    return fact;
 }
+
+
+float COMB_ARRAY[M][M];
+
 
 /// @brief A Choose B 
 /// @param a 
 /// @param b 
 /// @return com bination 
 float combination(uint16_t *a, uint16_t *b){
-    float comb=1;
-    uint16_t diff = *a - *b ;
-    if (debugSwitch) {printf("--a=%d \ta!=%d \n",  *a,factorial(a) );}
-    if (debugSwitch) {printf("--b=%d \tb!=%d \n",  *b,factorial(b) );}
-    if (debugSwitch) {printf("--a-b=%d \t(a-b)!=%d \n", diff, factorial(&diff) );}
-    comb = factorial(a)/(factorial(b) *factorial(&diff) ) ;///(factorial (b) * factorial (a-b));
-    if (debugSwitch) {printf ("combination= %f \n", comb);}
-    return comb;
+    if(!COMB_ARRAY[*a][*b] == 0){
+        float comb=1;
+        uint16_t diff = *a - *b ;
+        if (debugSwitch) {printf("--a=%d \ta!=%d \n",  *a,factorial(a) );}
+        if (debugSwitch) {printf("--b=%d \tb!=%d \n",  *b,factorial(b) );}
+        if (debugSwitch) {printf("--a-b=%d \t(a-b)!=%d \n", diff, factorial(&diff) );}
+        comb = factorial(a)/(factorial(b) *factorial(&diff) ) ;///(factorial (b) * factorial (a-b));
+        if (debugSwitch) {printf ("combination= %f \n", comb);}
+        COMB_ARRAY[*a][*b] = comb;
+        return comb;
+    }else{
+        return COMB_ARRAY[*a][*b];
+    }
 }
 
 /// @brief FIR DIFF FILTER GENERATOR  
@@ -391,7 +479,7 @@ void lcd_dist_update(int dist){
     char rs[20] ;
     
     snprintf(rs,20,"DIST(m):%d",dist);
-    printf(rs);
+    // printf(rs);
     // lcd.DisplayStringAt(50, 305, (uint8_t *)"DIST(m):", LEFT_MODE);
     lcd.DisplayStringAt(0, 305, (uint8_t *)rs, LEFT_MODE);
 
@@ -417,9 +505,23 @@ int main()
     spi.transfer(write_buf,2,read_buf,2,spi_cb,SPI_EVENT_COMPLETE );
     flags.wait_all(SPI_FLAG);
 
+
+    ///INTRRRUPTS
+    int2.rise(&data_cb);
+    if(!(flags.get()&DATA_READY_FLAG)&&(int2.read()==1)){
+        flags.set(DATA_READY_FLAG);
+    }    
+
+    write_buf[0]=CTRL_REG3;
+    write_buf[1]=CTRL_REG3_CONFIG;
+    spi.transfer(write_buf,2,read_buf,2,spi_cb,SPI_EVENT_COMPLETE );
+    flags.wait_all(SPI_FLAG);
+
+
+
+
     // write to reference register , then 1100, xplain ?
     write_buf[0]=REFERENCE|0x80|0x40;
-
     //start sequential sample reading
     spi.transfer(write_buf,7,read_buf,7,spi_cb,SPI_EVENT_COMPLETE );
     flags.wait_all(SPI_FLAG);
@@ -439,359 +541,96 @@ int main()
     //time_t seconds = time(NULL);
     //time_t tr;
     //time(&tr);
+    set_time(1256729737);  // Set RTC time to Wed, 28 Oct 2009 11:35:37
 
-    float gyro[M][d] = {0}; //initialie gyro buffer
-    int16_t gyroRead[M][d] = {0}; //initialie gyro direct reading
+    float gyro[d][M] = {0}; //initialie gyro buffer
+    int16_t gyroRead[d][M] = {0}; //initialie gyro direct reading
 
-    /*
-    float H1[F1][d]; //initialize Filter Coefficients1
-    float a1[F1][d] = {0}; //initialie filter input samples, multiplied by the filter coefficients
-    float g1[M][d]={0}; //initialize filtered gyro buffer, output of dot product after being processed by filters.
-    float W1[F1][d]; //initialize Blackman Window Coefficients
-    */
-
-    float H2[F2][d]; //initialize Filter Coefficients1
-    float a2[F2][d] = {0}; //initialie filter input samples, multiplied by the filter coefficients
-    float g2[M][d]={0}; //initialize filtered gyro buffer, output of dot product after being processed by filters.
-    float W2[F2][d]; //initialize Filter Coefficients1
-
-
-    float H3[F3][d]; //initialize Filter Coefficients1
-    float a3[F3][d] = {0}; //initialie filter input samples, multiplied by the filter coefficients
-    float g3[M][d]={0}; //initialize filtered gyro buffer, output of dot product after being processed by filters.
-    float W3[F3][d]; //initialize Filter Coefficients1
-
-
-    float V[M][d]={0}; //Linear Velocity x,y,z components calculated from corss angular with chip dim
-    float VLinear[M][1]={0}; //Linear Velocity Magnitude
-    float HL[FL][1]={0}; //initialize Filter Coefficients for processing Linear Velocity Delayed Samples
-    float aL[M][1]={0}; //List of Linear Velocity Magnitudes current and delayed to be used in processing
-    float WL[FL][1]; //initialize Blackman Coefficients for Windowing the Filters Coefficients
-
-    float gL[M][1]={0}; //Distance instantaneous resulted from integrating or corss product of VLinear
-    float L=0, vL2 ; //Total Distance , and Linear Velocity Squared accumulator
-
-    int16_t gyroReadSlow[40][d]={0} ;
-    float gyroSlow[40][d]={0} ;
-    float g2Slow[40][d]={0} ;
-    float VSlow[40][d]={0} ;
-    float VLinearSlow[40][1]={0} ;
-    float gLSlow[40][1]={0} ;
-    float LSlow=0 ;
-
+    float gyroI[d][M] = {0}; //initialie gyro buffer
+    float gyroD[d][M] = {0}; //initialie gyro buffer
+    float gyroP[d][M] = {0}; //initialie gyro buffer
 
     int8_t i=0,j=0,k=0, t=0; //i for gyro readings counter, j for dim counter, k for filter coefficients, t for sample number
 
 
     int8_t w=0, r=(M+w-D)%M , v=0;
 
+    float delta_v = 0.0;
 
-    printf("Start Init \n");
-
-    /*
-    filterRectangle(F1,d,H1);
-    printf("--Moving Average Filter--\n");
-    printArr2d(&H1[0][0],F1,d);// Filters
-    */
-
-
-    integratorTrapezoidal(F2,d,H2);
-    // printf("--Trapezoidal Integrator Filter--\n");
-    // printArr2d(&H2[0][0],F2,d);// Filters
-
-
-
-    differentiator(F3,d,H3);
-    // printf("--Differentiator Filter--\n");
-    // printArr2d(&H3[0][0],F3,d);// Filters
-
-
-    integratorTrapezoidal1D(FL,1,HL);
-    // printf("--1 Dimensional Integrator Filter--\n");
-    // printArr2d(&HL[0][0],FL,1);// Filters
-
-    /*
-    blackmanWindow(F1,d,W1);
-    printf("--Blackman Window Coefficients for Moving Average Filter--\n");
-    printArr2d(&W1[0][0],F1,d);// Filters
-    printf("--Moving Average Filter with Blackman Window--\n");
-    hadamardProduct(F1,d,W1,H1,H1);
-    printArr2d(&H1[0][0],F1,d);// Filters
-    */
-
-    blackmanWindow(F2,d,W2);
-    //unitWindow(F2,d,W2);
-    // printf("--Blackman Window Coefficients for Trapezoidal Integrator--\n");
-    // printArr2d(&W2[0][0],F2,d);// Filters
-    hadamardProduct(F2,d,W2,H2,H2);
-    // printf("--Trapezoidal Integrator Filter with Blackman Window--\n");
-    // printArr2d(&H2[0][0],F2,d);// Filters
-
-
-    blackmanWindow(F3,d,W3);
-    //unitWindow(F2,d,W2);
-    // printf("--Blackman Window Coefficients for Differentiator--\n");
-    // printArr2d(&W3[0][0],F3,d);// Filters
-    hadamardProduct(F3,d,W3,H3,H3);
-    // printArr2d(&H3[0][0],F3,d);// Filters
-
-
-    blackmanWindow1D(FL,1,WL);
-    //unitWindow1D(FL,1,WL);
-    // printf("--Blackman Window Coefficients for Differentiator--\n");
-    // printArr2d(&WL[0][0],FL,1);// Filters
-    hadamardProduct1D(FL,1,WL,HL,HL);
-    // printArr2d(&HL[0][0],FL,1);// Filters
-
-
-    // printf("Initial\n");
-    //printf("---- M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F, D, d, inf , N );
-    //printf("---- M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F, D, d, inf , N );
-    // printf("--w=%d \tr=%d \tv=%d \tt=%d\n", w,r,v,t );
-    // printf("Start Gyro\n");
-
-
-
-
+    int v_x = 0;
+    int v_y = 0;
+    int v_z = 0;
+    float distance_travelled = 0.;
+    unsigned int mills = 0;
+    time_t seconds = time(NULL);
+    unsigned int mills_o = (unsigned int)seconds*1000;
+    bool do_sample = false;
+    int last_sample = 0;
     while(1)
     {
-    // if (debugSwitch) {printf("===Start Gyro Reading===================================================\n" );}
-
-    //printf("M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F1, D1, d, inf , N );
-
-
-
-
-      //prepare the write buffer to trigger a sequential read
-      write_buf[0]=OUT_X_L|0x80|0x40;
-      //start sequential sample reading
-      spi.transfer(write_buf,7,read_buf,7,spi_cb,SPI_EVENT_COMPLETE );
-      flags.wait_all(SPI_FLAG);
-
-
-      for (j=0 ; j<d ; j++){
-
-        gyroRead[j][w] = ( ( (uint16_t)read_buf[2*j+1+1] ) <<8 ) | ( (uint16_t)read_buf[2*j+1] );
-
-        //Threshold if used ;
-        if (gyroRead[j][w] <= xHThreshold && gyroRead[j][w] >= xLThreshold) {gyroRead[j][w]=0;}
-        //
-
-        gyro[j][w] = ((float) gyroRead[j][w])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
-
-        //current_time = localtime(&seconds);
-        // if (debugSwitch) {printf(" t=%d\t, w=%d\t, r=%d\t,  j=%d\t,         gyroRead[%d][%d]=%d\t, gyro[%d][%d]=%f \n",          t, w ,r  , j ,    w,j, gyroRead[w][j],     w,j ,gyro[w][j]);}
-
-
-
-        //printf(">input \n t=%d \ti=%d \tj=%d \tw=%d \t r=%d \t v=%d \tgyro[%d][%d]=%f\n", t,i,j,w,r,v,w,j,j,gyro[w][j] );
-
-        /*
-        //Start Signal Prep block
-        v=D1;
-        //printf("===Start Prep\n");
-        for (k=r+(D-D1) ; k < r+(D-D1)+F1 ; k++ ){
-            a1[v][j]=gyro[k%M][j];
-            //printf("w=%d \tr=%d \tk=%d \tk%M=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a1[%d][%d]=%f \t gyro[%d][%d]=%f \t ads=%p\n", w, r,k,k%M, (D-D1) ,v ,D,D1,v,j ,a1[v][j],    k%M , j, gyro[k%M][j] , &a1[k][j]);
-            v=v-1;
+        time_t seconds = time(NULL);
+        mills = (unsigned int)seconds*1000;
+        if ( mills - mills_o > 500 ){
+            mills_o = (unsigned int)seconds*1000;
+            mills = mills_o;
+            do_sample = true;
+            last_sample = w;
         }
-        //printf("===End Prep\n");
-        //printf("===Start Filtered\n");
-        g1[w][j]= dotProduct2(&a1[0][j], &H1[0][j],F1,d);
-        //printf(">i=%d \t w=%d \t r1=%d \t r1+(D1-D1)=%d \t g2[%d][%d]=%f \n",i, w,r1,r1+(D1-D2), w,j,g3[w][j]);
-        //printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg1[%d][%d]=%f ads=%p\n", w, r, (D-D1) , r+(D-D1),w ,j ,g1[w][j], &g1[w][j]    );
-        //printf("===End Filtered\n");
-        //End Signal Prop Block
-        */
-
-        //Start Signal Prep block
-        v=D2;
-        // if (debugSwitch) {printf("===Start Prep for Filter 2 using D2 Delays\n");}
-        for (k=r+(D-D2) ; k < r+(D-D2)+F2 ; k++ ){
-            a2[v][j]=gyro[k%M][j];
-            // if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t(k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a2[%d][%d]=%f \t gyro[%d][%d]=%f \t ads=%p\n",             w, r,k,k%M, (D-D2) ,v ,D,D2,v,j ,a2[v][j],    k%M , j, gyro[k%M][j] , &a2[k][j]);}
-            v=v-1;
-        }
-        // if (debugSwitch) {printf("===End Prep for Filter 2 using D2 Delays\n");}
-        // if (debugSwitch) {printf("===Start Applying Filter H2\n");}
-        g2[w][j]= dotProduct2(&a2[0][j], &H2[0][j],F2,d);
-        //printf(">i=%d \t w=%d \t r1=%d \t r1+(D1-D1)=%d \t g2[%d][%d]=%f \n",i, w,r1,r1+(D1-D2), w,j,g3[w][j]);
-        // if (debugSwitch) {printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg2[%d][%d]=%f ads=%p\n", w, r, (D-D2) , r+(D-D2),w ,j ,g2[w][j], &g2[w][j]    );}
-        // if (debugSwitch) {printf("===End Applying Filter H2\n");}
-        //End Signal Prop Block
-
-        //Start Signal Prep block
-        v=D3;
-        // if (debugSwitch) {printf("===Start Prep for Filter 3 using D3 Delays\n");}
-        for (k=r+(D-D3) ; k < r+(D-D3)+F3 ; k++ ){
-            a3[v][j]=gyro[k%M][j];
-            // if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t(k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a3[%d][%d]=%f \t gyro[%d][%d]=%f \t ads=%p\n",             w, r,k,k%M, (D-D2) ,v ,D,D2,v,j ,a2[v][j],    k%M , j, gyro[k%M][j] , &a2[k][j]);}
-            v=v-1;
-        }
-        // if (debugSwitch) {printf("===End Prep for Filter 3 using D3 Delays\n");}
-        // if (debugSwitch) {printf("===Start Applying Filter H3\n");}
-        g3[w][j]= dotProduct2(&a3[0][j], &H3[0][j],F3,d);
-        //printf(">i=%d \t w=%d \t r1=%d \t r1+(D1-D1)=%d \t g3[%d][%d]=%f \n",i, w,r1,r1+(D1-D3), w,j,g3[w][j]);
-        // if (debugSwitch) {printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg3[%d][%d]=%f ads=%p\n", w, r, (D-D3) , r+(D-D3),w ,j ,g3[w][j], &g3[w][j]    );}
-        // if (debugSwitch) {printf("===End Applying Filter H3\n");}
-        //End Signal Prop Block
-
-    // if (debugSwitch) {printf("==End Read Gyro dim \n");}
-    }
-
-    //Logic for Pulse
-    //pulse=pulse+1;
-    //if (pulse >= 3) {step=step+1; distance=step*stepDistance;printf("step=%d , distance=%f",step, distance)}
-    //
-
-    // if (debugSwitch) {printf("==3 Dimensional Gyro Readings and Their Conversions\n");}
-    // if (debugSwitch) {printf("gyroRead[%d][j]=[%d\t %d\t %d\t]\n",w,gyroRead[w][0],gyroRead[w][1],gyroRead[w][2]);}
-    // if (debugSwitch) {printf("gyro[%d][j]=[%f\t %f\t %f\t]\n",w,gyro[w][0],gyro[w][1],gyro[w][2]);}
+        //prepare the write buffer to trigger a sequential read
+        write_buf[0]=OUT_X_L|0x80|0x40;
+        //start sequential sample reading
+        flags.wait_all(DATA_READY_FLAG);
+        spi.transfer(write_buf,7,read_buf,7,spi_cb,SPI_EVENT_COMPLETE );
+        flags.wait_all(SPI_FLAG);
 
 
-    //Section to calculate Instantaneous Velocity in x,y,z
-    // if (debugSwitch) {printf("===Start Cross Product of Instanenous gyro g2 to get Velocity in XYX\n");}
-    if (d==3) {
-        crossProduct3d(&gyro[w][0] , &V[w][0]);
-
-        //Equivalent to Cross product
-        //V[w][0] = g2[w][1] * zdim - g2[w][2] * ydim ;
-        //V[w][1] = g2[w][2] * xdim - g2[w][0] * zdim ;
-        //V[w][2] = g2[w][0] * ydim - g2[w][1] * xdim ;
-        //
-
-    }
-    else if (d==2) {V[w][0] =g2[w][0]*ydim ; V[w][1] = g2[w][1]*xdim ; }
-    else { V[w][0] = g2[w][0]*xdim ; }
-    // if (debugSwitch) {printf("Instantaneous Linear Velocity in X,Y,Z after corss V[w][j]=V[%d][j]= [%f \t%f \t%f]\n",w,V[w][0],V[w][1],V[w][2]);}// Filters
-    // if (debugSwitch) {printf("===End Cross Product of Instanenous gyro g2 to get Velocity in XYX\n");}
-
-
-    // Calculate Instantaneous Velocity Magnitude
-    // if (debugSwitch) {printf("===Start Calculate Instantaneous Velocity Magnitude\n");}
-    vL2=0;
-    for (j=0 ; j<d ; j++){
-        vL2=vL2+pow(V[w][j],2);
-    }
-    VLinear[w][0]=sqrt(vL2);
-    // if (debugSwitch) {printf("Instantaneous Linear Velocity Magnitude after Squaring = VLinear[w][0]=VLinear[%d][0]= %f\n",w,VLinear[w][0]);}// Filters
-    // if (debugSwitch) {printf("===Buffer Instantaneous Linear Velocity Magnitude Array VLinear[w][0]\n");}
-    // if (debugSwitch) {printArr2d(&VLinear[0][0], M,1);}
-    // if (debugSwitch) {printf("===End Calculate Instantaneous Velocity Magnitude\n");}
-
-
-    //Integrator based on trapezoidal
-    // if (debugSwitch) {printf("===Start Calculate Instantaneous Distance Magnitude based on Integration of Linear Velocity Magnitude\n");}
-    v=DL;
-    for (k=r+(D-DL) ; k < r+(D-DL)+FL ; k++ ){
-        aL[v][0]=VLinear[k%M][0];
-        // if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t (k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, aL[%d][0]=%f \t vLinear[%d][0]=%f \t ads=%p\n",         w, r,k,k%M, (D-DL) ,v ,D,DL,v ,aL[v][0],    k%M , VLinear[k%M][0] , &aL[v][0]);}
-        v=v-1;
-    }
-    gL[w][0]= dotProduct2(&aL[0][0], &HL[0][0],FL,1); //Integration of Velocity Magnitude
-    // if (debugSwitch) {printf("Instantaneous Linear Distance Magnitude gL[w][0]=gL[%d][0]= %f\n",w,gL[w][0]);}// Filters
-    // if (debugSwitch) {printf("===Instantaneous Linear Distance Magnitude Array VLinear[M][0]\n");}
-    // if (debugSwitch) {printArr2d(&gL[0][0], M,1);}
-    // if (debugSwitch) {printf("===End Calculate Instantaneous Linear Distance Magnitude based on Integration of Linear Velocity Magnitude Array\n");}
-
-    // if (debugSwitch) {printf(">Instant Distance:%f\n", gL[w][0]);}
-    // if (debugSwitch) {printf("Accumulated Distance Before Adding current Disantce= L = %f\n", L );}
-    L=L+gL[w][0];
-    // if (debugSwitch) {printf("Accumulated Distance After Adding current Disantce= L = %f\n", L );}
-    // if (debugSwitch) {
-    //     printf(">Total Distance:%f\n",L);
-    //     }
-    printf(">Total Distance:%f\n",L);
-    int dist_int = (int)L;
-    lcd_dist_update(dist_int);
-
-
-    //Increment Pointers
-    w=(w+1)%M;
-    r=(r+1)%M;
-    t=(t+1)%1024;
-
-    if (w==0){
         for (j=0 ; j<d ; j++){
-            gyroSlow[i][j]=gyro[w][j];
-            gyroReadSlow[i][j]=gyroRead[w][j];
-            g2Slow[i][j]=g2[w][j];
-            VSlow[i][j]=V[w][j];
+        gyroRead[j][w] = ( ( (uint16_t)read_buf[2*j+1+1] ) <<8 ) | ( (uint16_t)read_buf[2*j+1] );
+        gyro[j][w] = ((float) gyroRead[j][w])*(17.5f*0.017453292519943295769236907684886f / 1000.0);
+        printf(">gyro[%d]:%f\n",j,gyro[j][w] );
         }
-            VLinearSlow[i][0]=VLinear[w][0];
-            gLSlow[i][0]=gL[w][0];
-            LSlow=LSlow+gLSlow[i][0];
-            if (debugSwitch3){
-                // printf("--Buffer Slow Gyro Readings float--\n");
-                // printArr2dInt(&gyroReadSlow[0][0],40,d);// Filters
+
+        gyroI[0][w]=gyro[0][w];
+        gyroI[1][w]=gyro[1][w];
+        gyroI[2][w]=gyro[2][w];
+
+
+        // int dist_int = (int)distance_travelled;
+        // lcd_dist_update(dist_int);
+
+        // v_x = graph_sector(dist_int,1);
+        // lcd.DrawLine(w-1,v_x,w,v_x);
+
+        //Increment Pointers
+        w=(w+1)%M;
+        r=(r+1)%M;
+        t=(t+1);
+
+        if(do_sample){
+            float av = 0.;
+            // int diff = w - last_sample;
+            // if(diff)
+            for(int xi = 0; xi < M; xi++ ){
+                av +=  gyroI[0][xi];
             }
-        i=(i+1)%40;
+            av /= (float)M;
+            delta_v = av;
+            if(delta_v*delta_v > 1){
+                delta_v = 1;
+            }
+            distance_travelled = (float)distance_travelled + delta_v*delta_v;
+            printf(">mills:%d\n",mills);
+            printf(">Total Distance:%f\n",distance_travelled);
+            do_sample = false;
+        }
+
+        thread_sleep_for(1);
+
+
+
+        if((w%M) == 0){
+            lcd_clear();
+        }
     }
-
-
-    // if (debugSwitch3){
-    //     printf("--Pointers--\n");
-    //     printf("w=%d\t r=%d\t i=%d\t t=%d\n",w,r,i,t);// Filters
-
-    //     printf("--Buffer Gyro Readings float--\n");
-    //     printArr2dInt(&gyroRead[0][0],M,d);// Filters
-
-
-    //     printf("--Buffer Gyro Readings Converted and down scaled--\n");
-    //     printArr2d(&gyro[0][0],M,d);// Filters
-
-
-    //     printf("--Delayed Gyro Input to Filter--\n");
-    //     printArr2d(&a2[0][0],F2,d);// Filters
-    //     printf("--Trapezoidal Integrator Filter with Unit Window--\n");
-    //     printArr2d(&H2[0][0],F2,d);// Filters
-    //     printf("--Buffer Filtered Gyro Output Buffer--\n");
-    //     printArr2d(&g2[0][0],M,d);// Filters
-
-
-    //     printf("--Buffer 3D Linear Velocity instant in x,y,z--\n");
-    //     printArr2d(&V[0][0],M,d);// Filters
-    //     printf("--Buffer 1D Linear Velocity instant from corss product g2--\n");
-    //     printArr2d(&VLinear[0][0],M,1);// Filters
-
-    //     printf("--Delayed 1D Linear Velocity instant--\n");
-    //     printArr2d(&aL[0][0],FL,1);// Filters
-    //     printf("--Integrator Filter for 1D Linear Velocity--\n");
-    //     printArr2d(&HL[0][0],FL,1);// Filters
-
-    //     printf("--Buffer Distance from integrated 1D Linear Velocity--\n");
-    //     printArr2d(&gL[0][0],M,1);// Filters
-    // }
-
-    // if (debugSwitch2){
-    //     printf(">gyroReadx:%d\n",gyroRead[w][0]);
-    //     printf(">gyroReady:%d\n",gyroRead[w][1]);
-    //     printf(">gyroReadz:%d\n",gyroRead[w][2]);
-    //     printf(">gyrox:%f\n",gyro[w][0]);
-    //     printf(">gyroy:%f\n",gyro[w][1]);
-    //     printf(">gyroz:%f\n",gyro[w][2]);
-    //     printf(">g2x:%f\n",g2[w][0]);
-    //     printf(">g2y:%f\n",g2[w][1]);
-    //     printf(">g2z:%f\n",g2[w][2]);
-    //     printf(">g3x:%f\n",g3[w][0]);
-    //     printf(">g3y:%f\n",g3[w][1]);
-    //     printf(">g3z:%f\n",g3[w][2]);
-    //     printf(">Vx:%f\n",V[w][0]);
-    //     printf(">Vy:%f\n",V[w][1]);
-    //     printf(">Vz:%f\n",V[w][2]);
-    //     printf(">VLinear:%f\n",VLinear[w][0]);
-    //     printf(">gL:%f\n",gL[w][0]);
-    //     printf(">L:%f\n",L);
-    // }
-
-    thread_sleep_for(Tdelay * 1000);
-    if((t%M) == 0){
-        lcd_clear();
-    }
-    // if (
-    //     debugSwitch) {
-    //         printf("===End Gyro Reading====\n");
-    //     }
-  }
 
 }
