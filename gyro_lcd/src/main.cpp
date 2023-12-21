@@ -1,5 +1,6 @@
 #include "mbed.h"
 #include "../lib/LCD_DISCO/LCD_DISCO_F429ZI.h"
+#include "../lib/LCD_DISCO/TS_DISCO_F429ZI.h"
 
 #define PI  3.14159265358979323846 
 #define EPSILON 0.000001
@@ -15,14 +16,13 @@
 //Use Only in Debugging
 #define N 7  //number of readings provided by gyro per x-axis = inf/d
 #define inf ((N)*1) //number of samples taken from gyro, should be infinity
-//
 
 #define D (M-1) //Supported Delay Lines
 #define F (M) //Supported Filter Coefficients
 
 //#define Ts2 0.05000 Required
-#define Tdelay 10 //For Testing
-#define Ts2 1 //For Testing
+#define Tdelay 0.05 //For Testing
+#define Ts2 0.05 //For Testing
 #define Delta2 (1/Ts2) //For the integrator
 
 #define F1 (M) //Filter coefficients, n Delays + 1 current, F <=M , Fmax=M
@@ -37,6 +37,22 @@
 #define FL (M) //Trapezoidal integrator
 #define DL (FL-1) //
 
+// LCD Touchscreen Configurations
+LCD_DISCO_F429ZI lcd;
+TS_DISCO_F429ZI ts;
+bool start_status = false;
+bool stats_status = false;
+
+// location and dimensions of start button
+#define START_X 10
+#define START_Y 10
+#define START_WIDTH 100
+#define START_HEIGHT 50
+// location and dimensions of stats button
+#define STATS_X 130
+#define STATS_Y 10
+#define STATS_WIDTH 100
+#define STATS_HEIGHT 50
 
 
 SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
@@ -72,7 +88,7 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 
 #define SPI_FLAG 1
 
-static const bool debugSwitch=1;
+static const bool debugSwitch=0;
 
 uint8_t write_buf[32]; 
 uint8_t read_buf[32];
@@ -82,13 +98,43 @@ EventFlags flags;
 //provided to it takes an int parameter
 void spi_cb(int event){
   flags.set(SPI_FLAG);
-  
-
 }
 
-LCD_DISCO_F429ZI lcd;
+void DrawButtons() {
+    int x_placement, y_placement;
+    char* label;
+    // checking start label status
+    if(!start_status) {label = "Start";}
+    else {label = "Stop";}
+    // Drawing the START/STOP button box
+    lcd.DrawRect(START_X, START_Y, START_WIDTH, START_HEIGHT);
+    x_placement = START_X + START_WIDTH/2 - strlen(label)*6;
+    y_placement = START_Y + START_HEIGHT/2 - 8;
+    // Writing START/STOP on the button
+    lcd.DisplayStringAt(x_placement, y_placement, (uint8_t *)label, LEFT_MODE);
 
+    // checking show stats status
+    if(!stats_status) {label="Stats";}
+    else {label="Back";}
+    // Drawing the STATS button box
+    lcd.DrawRect(STATS_X, STATS_Y, STATS_WIDTH, STATS_HEIGHT);
+    x_placement = STATS_X + STATS_WIDTH/2 - strlen(label)*6;
+    y_placement = STATS_Y + STATS_HEIGHT/2 - 8;
+    // Writing STATS on the button
+    lcd.DisplayStringAt(x_placement, y_placement, (uint8_t *)label, LEFT_MODE);
+}
 
+void HomeDisplay(float L, float vel) {
+    uint8_t text[30];
+    sprintf((char*)text, "Distance Travelled");
+    lcd.DisplayStringAt(0, LINE(5), (uint8_t *)text, CENTER_MODE);
+    sprintf((char*)text, "%f", L);
+    lcd.DisplayStringAt(0, LINE(6), (uint8_t *)text, CENTER_MODE);
+    sprintf((char*)text, "Current Velocity");
+    lcd.DisplayStringAt(0, LINE(8), (uint8_t *)text, CENTER_MODE);
+    sprintf((char*)text, "%f", vel);
+    lcd.DisplayStringAt(0, LINE(9), (uint8_t *)text, CENTER_MODE);
+}
 
 int graph_sector( int val, int axis){
   int dx = val/15;
@@ -306,17 +352,18 @@ void hadamardProduct1D(uint16_t f, uint16_t dim, float (*arr1)[1] , float (*arr2
 
 
 void lcd_clear(){
-
+    
     // LCD INIT
-    lcd.Clear(LCD_COLOR_WHITE);
-    lcd.SetBackColor(LCD_COLOR_WHITE);
-    lcd.SetTextColor(LCD_COLOR_MAGENTA);
-    lcd.DisplayStringAt(0, LINE(0), (uint8_t *)"RTES/F23/MBED_CHLLNGEANGE", LEFT_MODE);
-    lcd.DisplayStringAt(0, 30, (uint8_t *)"X", LEFT_MODE);
-    lcd.DisplayStringAt(0, 130, (uint8_t *)"Y", LEFT_MODE);
-    lcd.DisplayStringAt(0, 230, (uint8_t *)"Z", LEFT_MODE);
-    lcd.DisplayStringAt(150, 305, (uint8_t *)"aj3944", LEFT_MODE);
-
+    lcd.Clear(LCD_COLOR_BLUE);
+    lcd.SetBackColor(LCD_COLOR_BLUE);
+    lcd.SetTextColor(LCD_COLOR_WHITE);
+    lcd.DisplayStringAt(0, LINE(17), (uint8_t *)"RTES/F23/MBED_CHLLNGEANGE", LEFT_MODE);
+    // lcd.DisplayStringAt(0, 30, (uint8_t *)"X", LEFT_MODE);
+    // lcd.DisplayStringAt(0, 130, (uint8_t *)"Y", LEFT_MODE);
+    // lcd.DisplayStringAt(0, 230, (uint8_t *)"Z", LEFT_MODE);
+    lcd.DisplayStringAt(0, LINE(19), (uint8_t *)"aj3944", CENTER_MODE);
+    // BSP_LCD_SetFont(&Font20);
+    // BSP_LCD_SetFont(&LCD_DEFAULT_FONT);
 }
 
 int main()
@@ -348,15 +395,14 @@ int main()
       
     /////////
 
+    lcd_clear();  
 
-    lcd_clear();
-
-    for(int i = 0; i < d; i++){
-      if(i==0)     lcd.SetTextColor(LCD_COLOR_RED);
-      if(i==1)     lcd.SetTextColor(LCD_COLOR_GREEN);
-      if(i==2)     lcd.SetTextColor(LCD_COLOR_BLUE);
-      lcd.DrawRect(0, 20+(i)*100, 239, 100*(i+1)); 
-    }
+    // for(int i = 0; i < d; i++){
+    //   if(i==0)     lcd.SetTextColor(LCD_COLOR_RED);
+    //   if(i==1)     lcd.SetTextColor(LCD_COLOR_GREEN);
+    //   if(i==2)     lcd.SetTextColor(LCD_COLOR_BLUE);
+    //   lcd.DrawRect(0, 20+(i)*100, 239, 100*(i+1)); 
+    // }
 
     //time_t seconds = time(NULL);
     time_t tr;
@@ -396,10 +442,8 @@ int main()
 
 
     int8_t i=0,j=0,k=0, t=0; //i for gyro readings counter, j for dim counter, k for filter coefficients, t for sample number
-    
 
     int8_t w=0, r=(M+w-D)%M , v=0;
-
 
     printf("Start Init \n");
     
@@ -464,25 +508,51 @@ int main()
     printf("--w=%d \tr=%d \tv=%d \tt=%d\n", w,r,v,t );
     printf("Start Gyro\n");
 
-
-    
+    uint16_t x_touch, y_touch;
+    TS_StateTypeDef TS_State;
+    int lcd_xsize = lcd.GetXSize();
+    int lcd_ysize = lcd.GetYSize();
 
     while(1)
     {
-    if (debugSwitch) {printf("===Start Gyro Reading====\n" );}
+        // printf("%d %d", lcd_xsize, lcd_ysize);    240  320
+//     #define START_X 10
+// #define START_Y 10
+// #define START_WIDTH 100
+// #define START_HEIGHT 50
+// // location and dimensions of stats button
+// #define STATS_X 130
+// #define STATS_Y 10
+// #define STATS_WIDTH 100
+// #define STATS_HEIGHT 50
+    DrawButtons();
+    ts.GetState(&TS_State);
+    if (TS_State.TouchDetected){
+        x_touch = TS_State.X;
+        y_touch = TS_State.Y;
+        if (x_touch >= START_X && x_touch <= START_X+START_WIDTH && y_touch >= lcd_ysize-START_Y-START_HEIGHT && y_touch <= lcd_ysize-START_Y) {
+            start_status = !start_status;
+            lcd_clear();
+            DrawButtons();
+        }
+        if (x_touch >= STATS_X && x_touch <= STATS_X+STATS_WIDTH && y_touch >= lcd_ysize-STATS_Y-STATS_HEIGHT && y_touch <= lcd_ysize-STATS_Y) {
+            stats_status = !stats_status;
+            lcd_clear();
+            DrawButtons();
+        }
+    }
+    if (!stats_status) {HomeDisplay(L, VLinear[w][0]);}
+    if (start_status)
+    {if (debugSwitch) {printf("===Start Gyro Reading====\n" );}
 
     //printf("M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F1, D1, d, inf , N );
-
-
-
 
       //prepare the write buffer to trigger a sequential read
       write_buf[0]=OUT_X_L|0x80|0x40;
       //start sequential sample reading
       spi.transfer(write_buf,7,read_buf,7,spi_cb,SPI_EVENT_COMPLETE );
       flags.wait_all(SPI_FLAG);
-      
- 
+       
       for (j=0 ; j<d ; j++){
 
         gyroRead[j][w] = ( ( (uint16_t)read_buf[2*j+1+1] ) <<8 ) | ( (uint16_t)read_buf[2*j+1] );
@@ -663,6 +733,8 @@ int main()
         lcd_clear();
     }
     if (debugSwitch) {printf("===End Gyro Reading====\n");}
+  }
+  else {thread_sleep_for(250);}
   }
 
 }

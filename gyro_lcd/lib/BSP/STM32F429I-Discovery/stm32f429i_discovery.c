@@ -972,8 +972,8 @@ uint16_t IOE_ReadMultiple(uint8_t Addr, uint8_t Reg, uint8_t *pBuffer, uint16_t 
   */
 void IOE_Delay(uint32_t Delay)
 {
-  //HAL_Delay(Delay);
-  wait_ms(Delay);
+  HAL_Delay(Delay);
+  // wait_ms(Delay);
 }
 
 /********************************* LINK GYROSCOPE *****************************/
