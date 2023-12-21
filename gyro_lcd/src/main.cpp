@@ -9,7 +9,7 @@
 #define ydim 1
 #define zdim 1
 
-#define d 3 //number of dim
+#define d 3 //number of dimentions in the Gyroscope
 #define M 16 //Buffer Length, number of samples in buffer per x-axis, M practically  M<N
 
 //Use Only in Debugging
@@ -74,7 +74,7 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 #define SPI_FLAG 1
 
 static const bool debugSwitch=0;
-static const bool debugSwitch2=1;
+static const bool debugSwitch2=0;
 static const bool debugSwitch3=0;
 
 uint8_t write_buf[32];
@@ -92,6 +92,8 @@ void spi_cb(int event){
 LCD_DISCO_F429ZI lcd;
 
 
+// convert values from +/- 500 to LCD compatible per axis.
+
 
 int graph_sector( int val, int axis){
   int dx = val/15;
@@ -103,44 +105,58 @@ int graph_sector( int val, int axis){
 }
 
 
+// FUNCTION printArri
+// PRINT INT ARRAY POINTER 
+// (ARRAY* , N) -> PRINT
 void printArri(float *a, int8_t K){
-    if (debugSwitch) {printf("Start printArri\n============\n");}
-    uint8_t i=0;
-    //printf("%d \t\n",S);
-    for (i=0 ; i<K ; i++){
+    if (debugSwitch) {
+        printf("Start printArri\n============\n");
+        uint8_t i=0;
+        for (i=0 ; i<K ; i++){
         printf("%d \t %f \n",i,*(a+i));
+        }
+        printf("End printArri\n============\n");
     }
-    if (debugSwitch) {printf("End printArri\n============\n");}
 }
-
+// FUNCTION printArr2D
+// PRINT 2D FLOAT ARRAY POINTER 
+// (ARRAY* , N, M) -> PRINT
 void printArr2d(float *a, int8_t k1, int8_t k2){ //k1 row, k2 col
-    if (debugSwitch) {printf("Start printArr2d\n============\n");}
-    uint8_t i=0,j=0,k=0;
-    for (i=0 ; i<k1 ; i++){
-        for (j=0; j<k2 ; j++){
-            printf("%f \t",*(a+k));
-            k=k+1;
+    if (debugSwitch) {
+        printf("Start printArr2d\n============\n");
+        uint8_t i=0,j=0,k=0;
+        for (i=0 ; i<k1 ; i++){
+            for (j=0; j<k2 ; j++){
+                printf("%f \t",*(a+k));
+                k=k+1;
+            }
+                printf("\n");
         }
-            printf("\n");
+        printf("End printArr2d\n============\n");
     }
-    if (debugSwitch) {printf("End printArr2d\n============\n");}
 }
-
+// FUNCTION printArr2D
+// PRINT 2D INT ARRAY POINTER 
+// (ARRAY* , N, M) -> PRINT
 void printArr2dInt(int16_t *a, int8_t k1, int8_t k2){ //k1 row, k2 col
-    if (debugSwitch) {printf("Start---printArr2dInt\n");}
-    uint8_t i=0,j=0,k=0;
-    for (i=0 ; i<k1 ; i++){
-        for (j=0; j<k2 ; j++){
-            printf("%d \t",*(a+k));
-            k=k+1;
+    if (debugSwitch) {
+        printf("Start---printArr2dInt\n");
+        uint8_t i=0,j=0,k=0;
+        for (i=0 ; i<k1 ; i++){
+            for (j=0; j<k2 ; j++){
+                printf("%d \t",*(a+k));
+                k=k+1;
+            }
+                printf("\n");
         }
-            printf("\n");
+        printf("End printArr2dInt\n============\n");
     }
-    if (debugSwitch) {printf("End printArr2dInt\n============\n");}
 }
 
 
-
+// FUNCTION dotProduct2
+// DO ARRAY POINTER DOT ARRAY POINTER for the given DIM 
+// (A* , B*, N, DIM) -> FLOAT
 
 float dotProduct2(float *an, float *bn, int8_t f, int8_t dim){
     if (debugSwitch) {printf("Start dotProduct============\n");}
@@ -157,6 +173,10 @@ float dotProduct2(float *an, float *bn, int8_t f, int8_t dim){
 
 }
 
+
+// FUNCTION crossProduct3d
+// DO ARRAY POINTER CROSS LIPM DIMENTIONS for 3D
+// (ARRAY* , RESULT*) -> VOID
 
 void crossProduct3d(float *an, float *vn){
     //float ax=*(an);
@@ -176,7 +196,10 @@ void crossProduct3d(float *an, float *vn){
 }
 
 
-
+/// @brief filterRectangle RECTANGLE: 1/F VALUES IN DIMXF Rectangle 
+/// @param f SIZE
+/// @param dim DIMENTIONS
+/// @param arr ARRAY 
 void filterRectangle( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
@@ -186,7 +209,10 @@ void filterRectangle( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
     }
 }
 
-
+/// @brief integratorTrapezoidal 0.5 from first and last, Everything in between
+/// @param f SIZE
+/// @param dim DIMENTIONS
+/// @param arr ARRAY 
 void integratorTrapezoidal( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
@@ -198,7 +224,10 @@ void integratorTrapezoidal( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
         }
     }
 }
-
+/// @brief integratorTrapezoidal1D  0.5 from first and last, Everything in between
+/// @param f SIZE
+/// @param dim DIMENTIONS
+/// @param arr ARRAY 
 void integratorTrapezoidal1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
@@ -211,7 +240,10 @@ void integratorTrapezoidal1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
     }
 }
 
-
+/// @brief MAKE A BLACKMAN WINDOW
+/// @param f SIZE
+/// @param dim DIMENTIONS
+/// @param arr ARRAY
 void blackmanWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
@@ -220,7 +252,10 @@ void blackmanWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
         }
     }
 }
-
+/// @brief MAKE A 1D BLACKMAN WINDOW
+/// @param f SIZE
+/// @param dim DIMENTIONS
+/// @param arr ARRAY
 void blackmanWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
@@ -229,8 +264,10 @@ void blackmanWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
         }
     }
 }
-
-
+/// @brief MAKE A UNIT WINDOW
+/// @param f SIZE
+/// @param dim DIMENTIONS
+/// @param arr ARRAY
 void unitWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
@@ -239,7 +276,10 @@ void unitWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
         }
     }
 }
-
+/// @brief MAKE A 1D UNIT WINDOW
+/// @param f SIZE
+/// @param dim DIMENTIONS
+/// @param arr ARRAY
 void unitWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
@@ -249,6 +289,10 @@ void unitWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
     }
 }
 
+/// @brief RETURN A FACTORIAL
+/// @param f SIZE
+/// @param dim DIMENTIONS
+/// @param arr ARRAY
 int factorial(uint16_t *n){
     uint16_t i=0, fact=1;
     for(i=1 ; i<=*n ; i++){
@@ -257,7 +301,10 @@ int factorial(uint16_t *n){
     return fact;
 }
 
-
+/// @brief A Choose B 
+/// @param a 
+/// @param b 
+/// @return com bination 
 float combination(uint16_t *a, uint16_t *b){
     float comb=1;
     uint16_t diff = *a - *b ;
@@ -269,6 +316,10 @@ float combination(uint16_t *a, uint16_t *b){
     return comb;
 }
 
+/// @brief FIR DIFF FILTER GENERATOR  
+/// @param f SIZE
+/// @param dim DIM
+/// @param arr 
 void differentiator( uint16_t f, uint16_t dim, float (*arr)[3] ){//dim
     uint16_t i=0,j=0, n=f-1;
         for (j=0; j<dim ; j++){
@@ -278,6 +329,13 @@ void differentiator( uint16_t f, uint16_t dim, float (*arr)[3] ){//dim
     }
 }
 
+
+/// @brief MULT D1 = S1 (*) S2
+/// @param f SIZE
+/// @param dim DIM
+/// @param arr1 S1
+/// @param arr2 S2 
+/// @param arr3 D1 
 void hadamardProduct(uint16_t f, uint16_t dim, float (*arr1)[3] , float (*arr2)[3] , float (*arr3)[3] ){//dim
     if (debugSwitch) {printf("Start Haddamard Product======\n");}
     if (debugSwitch) {printf("f=%d , dim=%d\n",f,dim);}
@@ -293,6 +351,12 @@ void hadamardProduct(uint16_t f, uint16_t dim, float (*arr1)[3] , float (*arr2)[
 }
 
 
+/// @brief MULT D1 = S1 (*) S2
+/// @param f SIZE
+/// @param dim DIM
+/// @param arr1 S1
+/// @param arr2 S2 
+/// @param arr3 D1 
 void hadamardProduct1D(uint16_t f, uint16_t dim, float (*arr1)[1] , float (*arr2)[1] , float (*arr3)[1] ){//dim
     if (debugSwitch) {printf("Start Haddamard Product======\n");}
     if (debugSwitch) {printf("f=%d , dim=%d\n",f,dim);}
@@ -307,7 +371,7 @@ void hadamardProduct1D(uint16_t f, uint16_t dim, float (*arr1)[1] , float (*arr2
     if (debugSwitch) {printf("End Haddamard Product======\n");}
 }
 
-
+/// @brief CLEAR LCD AND MAKE XYZ BOXES
 void lcd_clear(){
 
     // LCD INIT
@@ -319,6 +383,17 @@ void lcd_clear(){
     lcd.DisplayStringAt(0, 130, (uint8_t *)"Y", LEFT_MODE);
     lcd.DisplayStringAt(0, 230, (uint8_t *)"Z", LEFT_MODE);
     lcd.DisplayStringAt(150, 305, (uint8_t *)"aj3944", LEFT_MODE);
+
+}
+void lcd_dist_update(int dist){
+
+    // LCD INIT
+    char rs[20] ;
+    
+    snprintf(rs,20,"DIST(m):%d",dist);
+    printf(rs);
+    // lcd.DisplayStringAt(50, 305, (uint8_t *)"DIST(m):", LEFT_MODE);
+    lcd.DisplayStringAt(0, 305, (uint8_t *)rs, LEFT_MODE);
 
 }
 
@@ -421,19 +496,19 @@ int main()
 
 
     integratorTrapezoidal(F2,d,H2);
-    printf("--Trapezoidal Integrator Filter--\n");
-    printArr2d(&H2[0][0],F2,d);// Filters
+    // printf("--Trapezoidal Integrator Filter--\n");
+    // printArr2d(&H2[0][0],F2,d);// Filters
 
 
 
     differentiator(F3,d,H3);
-    printf("--Differentiator Filter--\n");
-    printArr2d(&H3[0][0],F3,d);// Filters
+    // printf("--Differentiator Filter--\n");
+    // printArr2d(&H3[0][0],F3,d);// Filters
 
 
     integratorTrapezoidal1D(FL,1,HL);
-    printf("--1 Dimensional Integrator Filter--\n");
-    printArr2d(&HL[0][0],FL,1);// Filters
+    // printf("--1 Dimensional Integrator Filter--\n");
+    // printArr2d(&HL[0][0],FL,1);// Filters
 
     /*
     blackmanWindow(F1,d,W1);
@@ -446,41 +521,41 @@ int main()
 
     blackmanWindow(F2,d,W2);
     //unitWindow(F2,d,W2);
-    printf("--Blackman Window Coefficients for Trapezoidal Integrator--\n");
-    printArr2d(&W2[0][0],F2,d);// Filters
+    // printf("--Blackman Window Coefficients for Trapezoidal Integrator--\n");
+    // printArr2d(&W2[0][0],F2,d);// Filters
     hadamardProduct(F2,d,W2,H2,H2);
-    printf("--Trapezoidal Integrator Filter with Blackman Window--\n");
-    printArr2d(&H2[0][0],F2,d);// Filters
+    // printf("--Trapezoidal Integrator Filter with Blackman Window--\n");
+    // printArr2d(&H2[0][0],F2,d);// Filters
 
 
     blackmanWindow(F3,d,W3);
     //unitWindow(F2,d,W2);
-    printf("--Blackman Window Coefficients for Differentiator--\n");
-    printArr2d(&W3[0][0],F3,d);// Filters
+    // printf("--Blackman Window Coefficients for Differentiator--\n");
+    // printArr2d(&W3[0][0],F3,d);// Filters
     hadamardProduct(F3,d,W3,H3,H3);
-    printArr2d(&H3[0][0],F3,d);// Filters
+    // printArr2d(&H3[0][0],F3,d);// Filters
 
 
     blackmanWindow1D(FL,1,WL);
     //unitWindow1D(FL,1,WL);
-    printf("--Blackman Window Coefficients for Differentiator--\n");
-    printArr2d(&WL[0][0],FL,1);// Filters
+    // printf("--Blackman Window Coefficients for Differentiator--\n");
+    // printArr2d(&WL[0][0],FL,1);// Filters
     hadamardProduct1D(FL,1,WL,HL,HL);
-    printArr2d(&HL[0][0],FL,1);// Filters
+    // printArr2d(&HL[0][0],FL,1);// Filters
 
 
-    printf("Initial\n");
+    // printf("Initial\n");
     //printf("---- M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F, D, d, inf , N );
     //printf("---- M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F, D, d, inf , N );
-    printf("--w=%d \tr=%d \tv=%d \tt=%d\n", w,r,v,t );
-    printf("Start Gyro\n");
+    // printf("--w=%d \tr=%d \tv=%d \tt=%d\n", w,r,v,t );
+    // printf("Start Gyro\n");
 
 
 
 
     while(1)
     {
-    if (debugSwitch) {printf("===Start Gyro Reading===================================================\n" );}
+    // if (debugSwitch) {printf("===Start Gyro Reading===================================================\n" );}
 
     //printf("M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F1, D1, d, inf , N );
 
@@ -505,7 +580,7 @@ int main()
         gyro[j][w] = ((float) gyroRead[j][w])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
 
         //current_time = localtime(&seconds);
-        if (debugSwitch) {printf(" t=%d\t, w=%d\t, r=%d\t,  j=%d\t,         gyroRead[%d][%d]=%d\t, gyro[%d][%d]=%f \n",          t, w ,r  , j ,    w,j, gyroRead[w][j],     w,j ,gyro[w][j]);}
+        // if (debugSwitch) {printf(" t=%d\t, w=%d\t, r=%d\t,  j=%d\t,         gyroRead[%d][%d]=%d\t, gyro[%d][%d]=%f \n",          t, w ,r  , j ,    w,j, gyroRead[w][j],     w,j ,gyro[w][j]);}
 
 
 
@@ -531,37 +606,37 @@ int main()
 
         //Start Signal Prep block
         v=D2;
-        if (debugSwitch) {printf("===Start Prep for Filter 2 using D2 Delays\n");}
+        // if (debugSwitch) {printf("===Start Prep for Filter 2 using D2 Delays\n");}
         for (k=r+(D-D2) ; k < r+(D-D2)+F2 ; k++ ){
             a2[v][j]=gyro[k%M][j];
-            if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t(k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a2[%d][%d]=%f \t gyro[%d][%d]=%f \t ads=%p\n",             w, r,k,k%M, (D-D2) ,v ,D,D2,v,j ,a2[v][j],    k%M , j, gyro[k%M][j] , &a2[k][j]);}
+            // if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t(k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a2[%d][%d]=%f \t gyro[%d][%d]=%f \t ads=%p\n",             w, r,k,k%M, (D-D2) ,v ,D,D2,v,j ,a2[v][j],    k%M , j, gyro[k%M][j] , &a2[k][j]);}
             v=v-1;
         }
-        if (debugSwitch) {printf("===End Prep for Filter 2 using D2 Delays\n");}
-        if (debugSwitch) {printf("===Start Applying Filter H2\n");}
+        // if (debugSwitch) {printf("===End Prep for Filter 2 using D2 Delays\n");}
+        // if (debugSwitch) {printf("===Start Applying Filter H2\n");}
         g2[w][j]= dotProduct2(&a2[0][j], &H2[0][j],F2,d);
         //printf(">i=%d \t w=%d \t r1=%d \t r1+(D1-D1)=%d \t g2[%d][%d]=%f \n",i, w,r1,r1+(D1-D2), w,j,g3[w][j]);
-        if (debugSwitch) {printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg2[%d][%d]=%f ads=%p\n", w, r, (D-D2) , r+(D-D2),w ,j ,g2[w][j], &g2[w][j]    );}
-        if (debugSwitch) {printf("===End Applying Filter H2\n");}
+        // if (debugSwitch) {printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg2[%d][%d]=%f ads=%p\n", w, r, (D-D2) , r+(D-D2),w ,j ,g2[w][j], &g2[w][j]    );}
+        // if (debugSwitch) {printf("===End Applying Filter H2\n");}
         //End Signal Prop Block
 
         //Start Signal Prep block
         v=D3;
-        if (debugSwitch) {printf("===Start Prep for Filter 3 using D3 Delays\n");}
+        // if (debugSwitch) {printf("===Start Prep for Filter 3 using D3 Delays\n");}
         for (k=r+(D-D3) ; k < r+(D-D3)+F3 ; k++ ){
             a3[v][j]=gyro[k%M][j];
-            if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t(k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a3[%d][%d]=%f \t gyro[%d][%d]=%f \t ads=%p\n",             w, r,k,k%M, (D-D2) ,v ,D,D2,v,j ,a2[v][j],    k%M , j, gyro[k%M][j] , &a2[k][j]);}
+            // if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t(k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a3[%d][%d]=%f \t gyro[%d][%d]=%f \t ads=%p\n",             w, r,k,k%M, (D-D2) ,v ,D,D2,v,j ,a2[v][j],    k%M , j, gyro[k%M][j] , &a2[k][j]);}
             v=v-1;
         }
-        if (debugSwitch) {printf("===End Prep for Filter 3 using D3 Delays\n");}
-        if (debugSwitch) {printf("===Start Applying Filter H3\n");}
+        // if (debugSwitch) {printf("===End Prep for Filter 3 using D3 Delays\n");}
+        // if (debugSwitch) {printf("===Start Applying Filter H3\n");}
         g3[w][j]= dotProduct2(&a3[0][j], &H3[0][j],F3,d);
         //printf(">i=%d \t w=%d \t r1=%d \t r1+(D1-D1)=%d \t g3[%d][%d]=%f \n",i, w,r1,r1+(D1-D3), w,j,g3[w][j]);
-        if (debugSwitch) {printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg3[%d][%d]=%f ads=%p\n", w, r, (D-D3) , r+(D-D3),w ,j ,g3[w][j], &g3[w][j]    );}
-        if (debugSwitch) {printf("===End Applying Filter H3\n");}
+        // if (debugSwitch) {printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg3[%d][%d]=%f ads=%p\n", w, r, (D-D3) , r+(D-D3),w ,j ,g3[w][j], &g3[w][j]    );}
+        // if (debugSwitch) {printf("===End Applying Filter H3\n");}
         //End Signal Prop Block
 
-    if (debugSwitch) {printf("==End Read Gyro dim \n");}
+    // if (debugSwitch) {printf("==End Read Gyro dim \n");}
     }
 
     //Logic for Pulse
@@ -569,13 +644,13 @@ int main()
     //if (pulse >= 3) {step=step+1; distance=step*stepDistance;printf("step=%d , distance=%f",step, distance)}
     //
 
-    if (debugSwitch) {printf("==3 Dimensional Gyro Readings and Their Conversions\n");}
-    if (debugSwitch) {printf("gyroRead[%d][j]=[%d\t %d\t %d\t]\n",w,gyroRead[w][0],gyroRead[w][1],gyroRead[w][2]);}
-    if (debugSwitch) {printf("gyro[%d][j]=[%f\t %f\t %f\t]\n",w,gyro[w][0],gyro[w][1],gyro[w][2]);}
+    // if (debugSwitch) {printf("==3 Dimensional Gyro Readings and Their Conversions\n");}
+    // if (debugSwitch) {printf("gyroRead[%d][j]=[%d\t %d\t %d\t]\n",w,gyroRead[w][0],gyroRead[w][1],gyroRead[w][2]);}
+    // if (debugSwitch) {printf("gyro[%d][j]=[%f\t %f\t %f\t]\n",w,gyro[w][0],gyro[w][1],gyro[w][2]);}
 
 
     //Section to calculate Instantaneous Velocity in x,y,z
-    if (debugSwitch) {printf("===Start Cross Product of Instanenous gyro g2 to get Velocity in XYX\n");}
+    // if (debugSwitch) {printf("===Start Cross Product of Instanenous gyro g2 to get Velocity in XYX\n");}
     if (d==3) {
         crossProduct3d(&gyro[w][0] , &V[w][0]);
 
@@ -588,46 +663,47 @@ int main()
     }
     else if (d==2) {V[w][0] =g2[w][0]*ydim ; V[w][1] = g2[w][1]*xdim ; }
     else { V[w][0] = g2[w][0]*xdim ; }
-    if (debugSwitch) {printf("Instantaneous Linear Velocity in X,Y,Z after corss V[w][j]=V[%d][j]= [%f \t%f \t%f]\n",w,V[w][0],V[w][1],V[w][2]);}// Filters
-    if (debugSwitch) {printf("===End Cross Product of Instanenous gyro g2 to get Velocity in XYX\n");}
+    // if (debugSwitch) {printf("Instantaneous Linear Velocity in X,Y,Z after corss V[w][j]=V[%d][j]= [%f \t%f \t%f]\n",w,V[w][0],V[w][1],V[w][2]);}// Filters
+    // if (debugSwitch) {printf("===End Cross Product of Instanenous gyro g2 to get Velocity in XYX\n");}
 
 
-    //Calculate Instantaneous Velocity Magnitude
-    if (debugSwitch) {printf("===Start Calculate Instantaneous Velocity Magnitude\n");}
+    // Calculate Instantaneous Velocity Magnitude
+    // if (debugSwitch) {printf("===Start Calculate Instantaneous Velocity Magnitude\n");}
     vL2=0;
     for (j=0 ; j<d ; j++){
         vL2=vL2+pow(V[w][j],2);
     }
     VLinear[w][0]=sqrt(vL2);
-    if (debugSwitch) {printf("Instantaneous Linear Velocity Magnitude after Squaring = VLinear[w][0]=VLinear[%d][0]= %f\n",w,VLinear[w][0]);}// Filters
-    if (debugSwitch) {printf("===Buffer Instantaneous Linear Velocity Magnitude Array VLinear[w][0]\n");}
-    if (debugSwitch) {printArr2d(&VLinear[0][0], M,1);}
-    if (debugSwitch) {printf("===End Calculate Instantaneous Velocity Magnitude\n");}
+    // if (debugSwitch) {printf("Instantaneous Linear Velocity Magnitude after Squaring = VLinear[w][0]=VLinear[%d][0]= %f\n",w,VLinear[w][0]);}// Filters
+    // if (debugSwitch) {printf("===Buffer Instantaneous Linear Velocity Magnitude Array VLinear[w][0]\n");}
+    // if (debugSwitch) {printArr2d(&VLinear[0][0], M,1);}
+    // if (debugSwitch) {printf("===End Calculate Instantaneous Velocity Magnitude\n");}
 
 
     //Integrator based on trapezoidal
-    if (debugSwitch) {printf("===Start Calculate Instantaneous Distance Magnitude based on Integration of Linear Velocity Magnitude\n");}
+    // if (debugSwitch) {printf("===Start Calculate Instantaneous Distance Magnitude based on Integration of Linear Velocity Magnitude\n");}
     v=DL;
     for (k=r+(D-DL) ; k < r+(D-DL)+FL ; k++ ){
         aL[v][0]=VLinear[k%M][0];
-        if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t (k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, aL[%d][0]=%f \t vLinear[%d][0]=%f \t ads=%p\n",         w, r,k,k%M, (D-DL) ,v ,D,DL,v ,aL[v][0],    k%M , VLinear[k%M][0] , &aL[v][0]);}
+        // if (debugSwitch) {printf("w=%d \tr=%d \tk=%d \t (k mod M)=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, aL[%d][0]=%f \t vLinear[%d][0]=%f \t ads=%p\n",         w, r,k,k%M, (D-DL) ,v ,D,DL,v ,aL[v][0],    k%M , VLinear[k%M][0] , &aL[v][0]);}
         v=v-1;
     }
     gL[w][0]= dotProduct2(&aL[0][0], &HL[0][0],FL,1); //Integration of Velocity Magnitude
-    if (debugSwitch) {printf("Instantaneous Linear Distance Magnitude gL[w][0]=gL[%d][0]= %f\n",w,gL[w][0]);}// Filters
-    if (debugSwitch) {printf("===Instantaneous Linear Distance Magnitude Array VLinear[M][0]\n");}
-    if (debugSwitch) {printArr2d(&gL[0][0], M,1);}
-    if (debugSwitch) {printf("===End Calculate Instantaneous Linear Distance Magnitude based on Integration of Linear Velocity Magnitude Array\n");}
+    // if (debugSwitch) {printf("Instantaneous Linear Distance Magnitude gL[w][0]=gL[%d][0]= %f\n",w,gL[w][0]);}// Filters
+    // if (debugSwitch) {printf("===Instantaneous Linear Distance Magnitude Array VLinear[M][0]\n");}
+    // if (debugSwitch) {printArr2d(&gL[0][0], M,1);}
+    // if (debugSwitch) {printf("===End Calculate Instantaneous Linear Distance Magnitude based on Integration of Linear Velocity Magnitude Array\n");}
 
-    if (debugSwitch) {printf(">Instant Distance:%f\n", gL[w][0]);}
-    if (debugSwitch) {printf("Accumulated Distance Before Adding current Disantce= L = %f\n", L );}
+    // if (debugSwitch) {printf(">Instant Distance:%f\n", gL[w][0]);}
+    // if (debugSwitch) {printf("Accumulated Distance Before Adding current Disantce= L = %f\n", L );}
     L=L+gL[w][0];
-    if (debugSwitch) {printf("Accumulated Distance After Adding current Disantce= L = %f\n", L );}
-    if (debugSwitch) {printf(">Total Distance:%f\n",L);}
-
-
-
-
+    // if (debugSwitch) {printf("Accumulated Distance After Adding current Disantce= L = %f\n", L );}
+    // if (debugSwitch) {
+    //     printf(">Total Distance:%f\n",L);
+    //     }
+    printf(">Total Distance:%f\n",L);
+    int dist_int = (int)L;
+    lcd_dist_update(dist_int);
 
 
     //Increment Pointers
@@ -646,73 +722,76 @@ int main()
             gLSlow[i][0]=gL[w][0];
             LSlow=LSlow+gLSlow[i][0];
             if (debugSwitch3){
-                printf("--Buffer Slow Gyro Readings float--\n");
-                printArr2dInt(&gyroReadSlow[0][0],40,d);// Filters
+                // printf("--Buffer Slow Gyro Readings float--\n");
+                // printArr2dInt(&gyroReadSlow[0][0],40,d);// Filters
             }
         i=(i+1)%40;
     }
 
 
-    if (debugSwitch3){
-        printf("--Pointers--\n");
-        printf("w=%d\t r=%d\t i=%d\t t=%d\n",w,r,i,t);// Filters
+    // if (debugSwitch3){
+    //     printf("--Pointers--\n");
+    //     printf("w=%d\t r=%d\t i=%d\t t=%d\n",w,r,i,t);// Filters
 
-        printf("--Buffer Gyro Readings float--\n");
-        printArr2dInt(&gyroRead[0][0],M,d);// Filters
-
-
-        printf("--Buffer Gyro Readings Converted and down scaled--\n");
-        printArr2d(&gyro[0][0],M,d);// Filters
+    //     printf("--Buffer Gyro Readings float--\n");
+    //     printArr2dInt(&gyroRead[0][0],M,d);// Filters
 
 
-        printf("--Delayed Gyro Input to Filter--\n");
-        printArr2d(&a2[0][0],F2,d);// Filters
-        printf("--Trapezoidal Integrator Filter with Unit Window--\n");
-        printArr2d(&H2[0][0],F2,d);// Filters
-        printf("--Buffer Filtered Gyro Output Buffer--\n");
-        printArr2d(&g2[0][0],M,d);// Filters
+    //     printf("--Buffer Gyro Readings Converted and down scaled--\n");
+    //     printArr2d(&gyro[0][0],M,d);// Filters
 
 
-        printf("--Buffer 3D Linear Velocity instant in x,y,z--\n");
-        printArr2d(&V[0][0],M,d);// Filters
-        printf("--Buffer 1D Linear Velocity instant from corss product g2--\n");
-        printArr2d(&VLinear[0][0],M,1);// Filters
+    //     printf("--Delayed Gyro Input to Filter--\n");
+    //     printArr2d(&a2[0][0],F2,d);// Filters
+    //     printf("--Trapezoidal Integrator Filter with Unit Window--\n");
+    //     printArr2d(&H2[0][0],F2,d);// Filters
+    //     printf("--Buffer Filtered Gyro Output Buffer--\n");
+    //     printArr2d(&g2[0][0],M,d);// Filters
 
-        printf("--Delayed 1D Linear Velocity instant--\n");
-        printArr2d(&aL[0][0],FL,1);// Filters
-        printf("--Integrator Filter for 1D Linear Velocity--\n");
-        printArr2d(&HL[0][0],FL,1);// Filters
 
-        printf("--Buffer Distance from integrated 1D Linear Velocity--\n");
-        printArr2d(&gL[0][0],M,1);// Filters
-    }
+    //     printf("--Buffer 3D Linear Velocity instant in x,y,z--\n");
+    //     printArr2d(&V[0][0],M,d);// Filters
+    //     printf("--Buffer 1D Linear Velocity instant from corss product g2--\n");
+    //     printArr2d(&VLinear[0][0],M,1);// Filters
 
-    if (debugSwitch2){
-        printf(">gyroReadx:%d\n",gyroRead[w][0]);
-        printf(">gyroReady:%d\n",gyroRead[w][1]);
-        printf(">gyroReadz:%d\n",gyroRead[w][2]);
-        printf(">gyrox:%f\n",gyro[w][0]);
-        printf(">gyroy:%f\n",gyro[w][1]);
-        printf(">gyroz:%f\n",gyro[w][2]);
-        printf(">g2x:%f\n",g2[w][0]);
-        printf(">g2y:%f\n",g2[w][1]);
-        printf(">g2z:%f\n",g2[w][2]);
-        printf(">g3x:%f\n",g3[w][0]);
-        printf(">g3y:%f\n",g3[w][1]);
-        printf(">g3z:%f\n",g3[w][2]);
-        printf(">Vx:%f\n",V[w][0]);
-        printf(">Vy:%f\n",V[w][1]);
-        printf(">Vz:%f\n",V[w][2]);
-        printf(">VLinear:%f\n",VLinear[w][0]);
-        printf(">gL:%f\n",gL[w][0]);
-        printf(">L:%f\n",L);
-    }
+    //     printf("--Delayed 1D Linear Velocity instant--\n");
+    //     printArr2d(&aL[0][0],FL,1);// Filters
+    //     printf("--Integrator Filter for 1D Linear Velocity--\n");
+    //     printArr2d(&HL[0][0],FL,1);// Filters
+
+    //     printf("--Buffer Distance from integrated 1D Linear Velocity--\n");
+    //     printArr2d(&gL[0][0],M,1);// Filters
+    // }
+
+    // if (debugSwitch2){
+    //     printf(">gyroReadx:%d\n",gyroRead[w][0]);
+    //     printf(">gyroReady:%d\n",gyroRead[w][1]);
+    //     printf(">gyroReadz:%d\n",gyroRead[w][2]);
+    //     printf(">gyrox:%f\n",gyro[w][0]);
+    //     printf(">gyroy:%f\n",gyro[w][1]);
+    //     printf(">gyroz:%f\n",gyro[w][2]);
+    //     printf(">g2x:%f\n",g2[w][0]);
+    //     printf(">g2y:%f\n",g2[w][1]);
+    //     printf(">g2z:%f\n",g2[w][2]);
+    //     printf(">g3x:%f\n",g3[w][0]);
+    //     printf(">g3y:%f\n",g3[w][1]);
+    //     printf(">g3z:%f\n",g3[w][2]);
+    //     printf(">Vx:%f\n",V[w][0]);
+    //     printf(">Vy:%f\n",V[w][1]);
+    //     printf(">Vz:%f\n",V[w][2]);
+    //     printf(">VLinear:%f\n",VLinear[w][0]);
+    //     printf(">gL:%f\n",gL[w][0]);
+    //     printf(">L:%f\n",L);
+    // }
 
     thread_sleep_for(Tdelay * 1000);
     if((t%M) == 0){
         lcd_clear();
     }
-    if (debugSwitch) {printf("===End Gyro Reading====\n");}
+    // if (
+    //     debugSwitch) {
+    //         printf("===End Gyro Reading====\n");
+    //     }
   }
 
 }
