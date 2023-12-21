@@ -44,6 +44,7 @@
 
 
 SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
+InterruptIn int2(PA_2,PullDown);
 
 //address of first register with gyro data
 #define OUT_X_L 0x28
@@ -64,6 +65,16 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 //configuration: Reserved=00 , HPM = 00 (Normal Mode Reset Filter), HPCF=0111 (at ODR=190 then cutoff = 0.09 Hz)
 #define CTRL_REG2_CONFIG 0b00'00'0'1'1'1
 
+
+// #define CTRL_REG2_CONFIG 0b00'00'0'0'0'0
+
+//register fields(bits): I1_Int1 (1), I1_Boot(1), H_Lactive(1), PP_OD(1), I2_DRDY(1), I2_WTM(1), I2_ORun(1), I2_Empty(1)
+#define CTRL_REG3 0x22
+
+//configuration: Int1 disabled, Boot status disabled, active high interrupts, push-pull, enable Int2 data ready, disable fifo interru
+#define CTRL_REG3_CONFIG 0b10'00'1'0'0'0
+
+
 //register fields(bits): reserved(1), endian-ness(1),Full scale sel(2), reserved(1),self-test(2), SPI mode(1)
 #define CTRL_REG4 0x23
 
@@ -72,12 +83,63 @@ SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
 
 //We increased the range to 2000 DPS by setting FS=11
 //#define CTRL_REG4_CONFIG 0b0'0'01'0'00'0 this was the lecture value
-#define CTRL_REG4_CONFIG 0b0'0'11'0'00'0
+// #define CTRL_REG4_CONFIG 0b0'0'11'0'00'0
+
+
+#define CTRL_REG4_CONFIG 0b0'0'01'0'00'0
+
+
+// BOOT(1)-FIFO_EN(1)-(1)-HPen(1)-INT1_Sel1(1)-INT1_Sel0(1)-Out_Sel1(1)-Out_Sel0(1)
+#define CTRL_REG5 0x24
+
+//FIFO EN //hpass en //INT HPASS AND LOW PASS
+#define CTRL_REG5_CONFIG 0b01'01'1'0'1'0
+
+// BOOT(1)-FIFO_EN(1)-(1)-HPen(1)-INT1_Sel1(1)-INT1_Sel0(1)-Out_Sel1(1)-Out_Sel0(1)
+#define REFERENCE 0x25
+#define OUT_TEMP 0x26
+#define STATUS_REG 0x27
+#define FIFO_CTRL_REG 0x27
+#define FIFO_CTRL_CONFIG 0b00'11'1'0'1'0
+
+
+#define FIFO_CTRL_REG 0x2e
+#define FIFO_CTRL_CONFIG 0b00'11'1'0'1'0
+
+
+#define FIFO_CTRL_REG 0x2f
+// #define FIFO_CTRL_CONFIG 0b00'11'1'0'1'0
+
+#define INT1_CFG 0x30
+#define INT1_CFG_CONFIG 0b01'00'0'0'1'0
+
+
+#define INT1_SRC 0x31
+
+
+#define INT1_THS_XH 0x32
+#define INT1_THS_XH_CONFIG 0b00'00'1'0'0'0
+#define INT1_THS_XL 0x33
+#define INT1_THS_XH_CONFIG 0b00'00'0'1'0'0
+
+#define INT1_THS_YH 0x34
+#define INT1_THS_YL 0x35
+
+#define INT1_THS_ZH 0x36
+#define INT1_THS_ZL 0x37
+
+
+#define INT1_DURATION 0x38
+#define INT1_DURATION_CONFIG 0b10'00'0'1'0'0
+
+
+
 
 #define SPI_FLAG 1
+#define DATA_READY_FLAG 2
 
 static const bool debugSwitch=0;
-static const bool debugSwitch2=1;
+static const bool debugSwitch2=0;
 static const bool debugSwitch3=0;
 
 uint8_t write_buf[32]; 
@@ -94,7 +156,9 @@ void spi_cb(int event){
 
 LCD_DISCO_F429ZI lcd;
 
-
+void data_cb(){
+  flags.set(DATA_READY_FLAG);
+};
 
 int graph_sector( int val, int axis){
   int dx = val/15;
@@ -252,25 +316,36 @@ void unitWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
         }
     }
 }
+long long int FACT_ARRAY[M];
 
-int factorial(uint16_t *n){
-    uint16_t i=0, fact=1;
-    for(i=1 ; i<=*n ; i++){    
-      fact=fact*i;    
+long long int factorial(uint16_t *n){
+    if(!FACT_ARRAY[*n] == 0){
+        uint16_t i=0, fact=1;
+        for(i=1 ; i<=*n ; i++){
+        fact=fact*i;
+        }
+        FACT_ARRAY[*n] = fact;
+        return fact;
+    }else{
+        return FACT_ARRAY[*n];
     }
-    return fact;
 }
-
+float COMB_ARRAY[M][M];
 
 float combination(uint16_t *a, uint16_t *b){
-    float comb=1;
-    uint16_t diff = *a - *b ;
-    if (debugSwitch) {printf("--a=%d \ta!=%d \n",  *a,factorial(a) );}
-    if (debugSwitch) {printf("--b=%d \tb!=%d \n",  *b,factorial(b) );}
-    if (debugSwitch) {printf("--a-b=%d \t(a-b)!=%d \n", diff, factorial(&diff) );}
-    comb = factorial(a)/(factorial(b) *factorial(&diff) ) ;///(factorial (b) * factorial (a-b));
-    if (debugSwitch) {printf ("combination= %f \n", comb);}
-    return comb;
+    if(!COMB_ARRAY[*a][*b] == 0){
+        float comb=1;
+        uint16_t diff = *a - *b ;
+        if (debugSwitch) {printf("--a=%d \ta!=%d \n",  *a,factorial(a) );}
+        if (debugSwitch) {printf("--b=%d \tb!=%d \n",  *b,factorial(b) );}
+        if (debugSwitch) {printf("--a-b=%d \t(a-b)!=%d \n", diff, factorial(&diff) );}
+        comb = factorial(a)/(factorial(b) *factorial(&diff) ) ;///(factorial (b) * factorial (a-b));
+        if (debugSwitch) {printf ("combination= %f \n", comb);}
+        COMB_ARRAY[*a][*b] = comb;
+        return comb;
+    }else{
+        return COMB_ARRAY[*a][*b];
+    }
 }
 
 void differentiator( uint16_t f, uint16_t dim, float (*arr)[3] ){//dim
@@ -325,7 +400,17 @@ void lcd_clear(){
     lcd.DisplayStringAt(150, 305, (uint8_t *)"aj3944", LEFT_MODE);
 
 }
+void lcd_dist_update(int dist){
 
+    // LCD INIT
+    char rs[20] ;
+    
+    snprintf(rs,20,"DIST(cm):%d",dist);
+    printf(rs);
+    // lcd.DisplayStringAt(50, 305, (uint8_t *)"DIST(m):", LEFT_MODE);
+    lcd.DisplayStringAt(0, 305, (uint8_t *)rs, LEFT_MODE);
+
+}
 int main()
 {
     spi.format(8,3);
@@ -345,6 +430,20 @@ int main()
     write_buf[1]=CTRL_REG4_CONFIG;
     spi.transfer(write_buf,2,read_buf,2,spi_cb,SPI_EVENT_COMPLETE );
     flags.wait_all(SPI_FLAG); 
+
+
+
+    ///INTRRRUPTS
+    int2.rise(&data_cb);
+    if(!(flags.get()&DATA_READY_FLAG)&&(int2.read()==1)){
+        flags.set(DATA_READY_FLAG);
+    }    
+
+    write_buf[0]=CTRL_REG3;
+    write_buf[1]=CTRL_REG3_CONFIG;
+    spi.transfer(write_buf,2,read_buf,2,spi_cb,SPI_EVENT_COMPLETE );
+    flags.wait_all(SPI_FLAG);
+
 
     // write to reference register , then 1100, xplain ?
     write_buf[0]=REFERENCE|0x80|0x40;
@@ -409,6 +508,7 @@ int main()
     float gLSlow[40][1]={0} ;  
     float LSlow=0 ;  
 
+    int Lint = 0;
 
     int8_t i=0,j=0,k=0, t=0; //i for gyro readings counter, j for dim counter, k for filter coefficients, t for sample number
     
@@ -479,18 +579,31 @@ int main()
     printf("--w=%d \tr=%d \tv=%d \tt=%d\n", w,r,v,t );
     printf("Start Gyro\n");
 
+    bool do_sample;
+    set_time(1256729737);  // Set RTC time to Wed, 28 Oct 2009 11:35:37
+    time_t seconds = time(NULL);   
+    unsigned int mills_o = (unsigned int)seconds*1000;
 
-    
+    int2.rise(&data_cb);
+    if(!(flags.get()&DATA_READY_FLAG)&&(int2.read()==1)){
+        flags.set(DATA_READY_FLAG);
+    }  
+
 
     while(1)
     {
+        seconds = time(NULL);   
+        unsigned int mills_now = (unsigned int)seconds*1000;
+        if(mills_now - mills_o > 500){
+            do_sample = true;
+        }
     if (debugSwitch) {printf("===Start Gyro Reading===================================================\n" );}
 
     //printf("M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F1, D1, d, inf , N );
 
+  
 
-
-
+      flags.wait_all(DATA_READY_FLAG);
       //prepare the write buffer to trigger a sequential read
       write_buf[0]=OUT_X_L|0x80|0x40;
       //start sequential sample reading
@@ -508,8 +621,14 @@ int main()
 
         gyro[j][w] = ((float) gyroRead[j][w])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
         
+
+
+        
         //current_time = localtime(&seconds);
         if (debugSwitch) {printf(" t=%d\t, w=%d\t, r=%d\t,  j=%d\t,         gyroRead[%d][%d]=%d\t, gyro[%d][%d]=%f \n",          t, w ,r  , j ,    w,j, gyroRead[w][j],     w,j ,gyro[w][j]);}
+        // printf("gyro[%d][%d]=%f \n", w,j ,gyro[w][j]);
+
+
 
 
         /* Tune : Apply a full length integrator or not
@@ -634,11 +753,20 @@ int main()
     L=L+gL[w][0];
     if (debugSwitch) {printf("Accumulated Distance After Adding current Disantce= L = %f\n", L );}
     if (debugSwitch) {printf(">Total Distance:%f\n",L);}
+    printf(">Total Distance:%f\n",L);
 
 
+    if(do_sample){
+            Lint = Lint +  (int)(17.5*L); //magic number for human gait
+            do_sample = false;
+    }
 
-    
+    // Lint = Lint / 10 ; // in meters
 
+    printf(">Interger Distance:%d\n",Lint);
+
+
+    lcd_dist_update(Lint);
 
     //Increment Pointers
     w=(w+1)%M;
