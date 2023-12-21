@@ -597,7 +597,7 @@ int main()
         if(mills_now - mills_o > 500){
             do_sample = true;
         }
-    if (debugSwitch) {printf("===Start Gyro Reading===================================================\n" );}
+        if (debugSwitch) {printf("===Start Gyro Reading===================================================\n" );}
 
     //printf("M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F1, D1, d, inf , N );
 
@@ -613,13 +613,13 @@ int main()
  
       for (j=0 ; j<d ; j++){//For each dimension , process each dimension reading sequentially
 
-        gyroRead[j][w] = ( ( (uint16_t)read_buf[2*j+1+1] ) <<8 ) | ( (uint16_t)read_buf[2*j+1] );
+        gyroRead[w][j] = ( ( (uint16_t)read_buf[2*j+1+1] ) <<8 ) | ( (uint16_t)read_buf[2*j+1] );
         
         //Threshold if used ;
-        if (gyroRead[j][w] <= xHThreshold && gyroRead[j][w] >= xLThreshold) {gyroRead[j][w]=0;} //If within threshold then reset the readings to eliminate static noise
+        if (gyroRead[w][j] <= xHThreshold && gyroRead[w][j] >= xLThreshold) {gyroRead[w][j]=0;} //If within threshold then reset the readings to eliminate static noise
         //
 
-        gyro[j][w] = ((float) gyroRead[j][w])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
+        gyro[w][j] = ((float) gyroRead[w][j])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
         
 
 
@@ -851,7 +851,7 @@ int main()
     
 
     //Tune : Sample the gyro readings every Tdelay, ideally Tdelay = 0.5/M so that every M-Samples will be processed to yield a 0.5 sample as per the challenge requirements.
-    thread_sleep_for(Tdelay * 1000);
+    thread_sleep_for(1);
     if((t%M) == 0){
         lcd_clear();
     }
