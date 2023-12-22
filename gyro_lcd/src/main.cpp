@@ -120,7 +120,7 @@ InterruptIn int2(PA_2,PullDown);
 #define INT1_THS_XH 0x32
 #define INT1_THS_XH_CONFIG 0b00'00'1'0'0'0
 #define INT1_THS_XL 0x33
-#define INT1_THS_XH_CONFIG 0b00'00'0'1'0'0
+#define INT1_THS_XL_CONFIG 0b00'00'0'1'0'0
 
 #define INT1_THS_YH 0x34
 #define INT1_THS_YL 0x35
@@ -757,7 +757,7 @@ int main()
 
 
     if(do_sample){
-            Lint = Lint +  (int)(17.5*L); //magic number for human gait
+            Lint = Lint +  (int)(4.3*L); //magic number for human gait
             do_sample = false;
     }
 
