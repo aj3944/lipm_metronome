@@ -10,7 +10,7 @@
 #define CTRL_REG1 0x20
 
 //configuration: 200Hz ODR,50Hz cutoff, Power on, Z on, Y on, X on
-//DR=01 , BW=10 --> 190Hz (190 readings per second) and 50Hz Cutoff (Is this the recognized rate of change in w readings) , PD=1 , Zen=1 , Xen=1 , Yen=1
+//DR=01 , BW=10 --> 190Hz (190 readings per second) and 50Hz Cutoff , PD=1 , Zen=1 , Xen=1 , Yen=1
 #define CTRL_REG1_CONFIG 0b01'10'1'1'1'1
 
 //register fields(bits): data_rate(2),Bandwidth(2),Power_down(1),Zen(1),Yen(1),Xen(1)
@@ -19,8 +19,6 @@
 //configuration: Reserved=00 , HPM = 00 (Normal Mode Reset Filter), HPCF=0111 (at ODR=190 then cutoff = 0.09 Hz)
 #define CTRL_REG2_CONFIG 0b00'00'0'1'1'1
 
-
-// #define CTRL_REG2_CONFIG 0b00'00'0'0'0'0
 
 //register fields(bits): I1_Int1 (1), I1_Boot(1), H_Lactive(1), PP_OD(1), I2_DRDY(1), I2_WTM(1), I2_ORun(1), I2_Empty(1)
 #define CTRL_REG3 0x22
@@ -35,13 +33,9 @@
 //configuration: reserved,little endian,500 dps,reserved,disabled,4-wire mode
 // Block Data Update = 0 (Continous value) , BLE = 0 LSB data at Lower Address , FS=01 (500 DPS) , Registered = 0 , Fixed = 00 , SIM = 0 (SPI interface Mode Selection = 4-Wire interface)  
 
+//CTRL_REG4_CONFIG 0b0'0'01'0'00'0 this was the lecture value
 //We increased the range to 2000 DPS by setting FS=11
-//#define CTRL_REG4_CONFIG 0b0'0'01'0'00'0 this was the lecture value
-// #define CTRL_REG4_CONFIG 0b0'0'11'0'00'0
-
-
-#define CTRL_REG4_CONFIG 0b0'0'01'0'00'0
-
+#define CTRL_REG4_CONFIG 0b0'0'11'0'00'0
 
 // BOOT(1)-FIFO_EN(1)-(1)-HPen(1)-INT1_Sel1(1)-INT1_Sel0(1)-Out_Sel1(1)-Out_Sel0(1)
 #define CTRL_REG5 0x24
@@ -137,7 +131,7 @@ void init_spi(){
     flags.wait_all(SPI_FLAG);
 
 
-    // write to reference register , then 1100, xplain ?
+    // write to reference register , then 1100
     write_buf[0]=REFERENCE|0x80|0x40;
     
     //start sequential sample reading

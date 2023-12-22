@@ -280,17 +280,6 @@ float aL[FL][1]={0}; //initialize a buffer to keep the last FL delayed Linear Ve
 float gL[M][1]={0}; //Distance instantaneous resulted from integrating the delayed FL samples from VLinear (integration of aL)
 float L=0, vL2=0 ; //Total Distance , and Linear Velocity Squared accumulator 
 
-//Buffer of 40 samples filled every 0.5 seconds by the M-th processed faster buffer samples.
-//i.e. the Main fast buffer samples and processes the gyro readings every 0.5/M seconds, so every M-gyro readings will happen every 0.5 seconds ,and this
-//M-sample from the fast buffer will fill in 1 sample from the slower 40-samples buffer
-//So all of these buffers are the processed values from the faster buffer, but slower
-int16_t gyroReadSlow[40][d]={0} ; //to hold gyro readings
-float gyroSlow[40][d]={0} ;   //to hold scaled gyro samples
-float g2Slow[40][d]={0} ;   //to hold integrated gyro samples
-float VSlow[40][d]={0} ;  //to hold Velocity in x,y,z 
-float VLinearSlow[40][1]={0} ;  //to hold Linear Velocity Magnitude
-float gLSlow[40][1]={0} ;   //To hold instantenous distance
-float LSlow=0 ;  //to hold the total distance
 
 
 // Lint is defined hold the approximate scaled total distance, the scaling can be calibrated and it compensates for 
