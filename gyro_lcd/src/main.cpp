@@ -25,7 +25,7 @@ Thread gyro_thread;
 
 bool do_sample = true;
 
-
+int yy = 0;
 // void update_distance(){
 
 // }
@@ -33,7 +33,7 @@ void touch_actions(){
     while(1){
         do_touch();
         DrawButtons();
-        ThisThread::sleep_for(100);
+        ThisThread::sleep_for(300);
     }
 }
 
@@ -41,6 +41,7 @@ void gyro_actions(){
     time_t seconds = time(NULL);   
     unsigned int mills_o = (unsigned int)seconds*1000;
     seconds = time(NULL);   
+    int x_int = 0,y_int = 0,z_int = 0;
 
     while(1)
     {
@@ -61,7 +62,6 @@ void gyro_actions(){
             gyroRead[w][j] = ( ( (uint16_t)read_buf[2*j+1+1] ) <<8 ) | ( (uint16_t)read_buf[2*j+1] );
             if (gyroRead[w][j] <= xHThreshold && gyroRead[w][j] >= xLThreshold) {gyroRead[w][j]=0;} //If within threshold then reset the readings to eliminate static noise
             gyro[w][j] = ((float) gyroRead[w][j])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
-
             v=D2;
             for (k=r+(D-D2) ; k < r+(D-D2)+F2 ; k++ ){
                 a2[v][j]=gyro[k%M][j];
@@ -69,6 +69,7 @@ void gyro_actions(){
             }
             g2[w][j]= dotProduct2(&a2[0][j], &H2[0][j],F2,d); 
         }
+
         if (d==3) {
             V[w][0] = g2[w][1] * zdim - g2[w][2] * ydim ;
             V[w][1] = g2[w][2] * xdim - g2[w][0] * zdim ;
@@ -97,13 +98,23 @@ void gyro_actions(){
                 Lint = Lint +  (int)(14.3*L); //magic number for human gait
                 // do_sample = false;
         }
-        HomeDisplay(Lint,L);
+        if(start_status){
+            HomeDisplay(Lint,L);
+            x_int = (int)(5000.0*g2[w][0]);
+            y_int = (int)(5000.0*g2[w][1]);
+            z_int = (int)(5000.0*g2[w][2]);
+            AddPoint((int)x_int,(int)y_int,(int)z_int,yy);
+        }
+
 
         //Increment Pointers
         w=(w+1)%M;
         r=(r+1)%M;
         t=(t+1)%1024;
-
+        yy=(yy+1)%240;
+        if(yy==0){
+            lcd_clear();
+        }
         if (w==0){
             for (j=0 ; j<d ; j++){
                 gyroSlow[i][j]=gyro[w][j];
@@ -125,11 +136,10 @@ void gyro_actions(){
 int main()
 {
 
-    /////INIT TOUCH AND LED////
     lcd_clear();
+    /////INIT TOUCH AND GYRO ////
     touch_thread.start(touch_actions);
     set_time(1256729737);  // Set RTC time to Wed, 28 Oct 2009 11:35:37
-    lcd_clear();
     init_filters();
     init_spi();
     gyro_thread.start(gyro_actions);
