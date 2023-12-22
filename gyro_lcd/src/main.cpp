@@ -138,13 +138,13 @@ void DrawButtons() {
 void HomeDisplay(float L, float vel) {
     uint8_t text[30];
     sprintf((char*)text, "Distance Travelled");
-    lcd.DisplayStringAt(0, LINE(5), (uint8_t *)text, CENTER_MODE);
-    sprintf((char*)text, "%f", L);
     lcd.DisplayStringAt(0, LINE(6), (uint8_t *)text, CENTER_MODE);
-    sprintf((char*)text, "Current Velocity");
+    sprintf((char*)text, "%f", L);
     lcd.DisplayStringAt(0, LINE(8), (uint8_t *)text, CENTER_MODE);
+    sprintf((char*)text, "Current Velocity");
+    lcd.DisplayStringAt(0, LINE(10), (uint8_t *)text, CENTER_MODE);
     sprintf((char*)text, "%f", vel);
-    lcd.DisplayStringAt(0, LINE(9), (uint8_t *)text, CENTER_MODE);
+    lcd.DisplayStringAt(0, LINE(12), (uint8_t *)text, CENTER_MODE);
 }
 
 
@@ -372,7 +372,7 @@ void lcd_clear(){
     lcd.SetBackColor(LCD_COLOR_BLUE);
     lcd.SetTextColor(LCD_COLOR_WHITE);
     lcd.DisplayStringAt(0, LINE(17), (uint8_t *)"RTES/F23/MBED_CHLLNGEANGE", LEFT_MODE);
-    lcd.DisplayStringAt(0, LINE(19), (uint8_t *)"aj3944, ms14845, ", CENTER_MODE);
+    lcd.DisplayStringAt(0, LINE(19), (uint8_t *)"aj3944,ms14845,ae2405", CENTER_MODE);
 }
 
 /// @brief CLEAR LCD AND MAKE XYZ BOXES
@@ -386,7 +386,7 @@ void graph_lcd_clear(){
     lcd.DisplayStringAt(0, 30, (uint8_t *)"X", LEFT_MODE);
     lcd.DisplayStringAt(0, 130, (uint8_t *)"Y", LEFT_MODE);
     lcd.DisplayStringAt(0, 230, (uint8_t *)"Z", LEFT_MODE);
-    lcd.DisplayStringAt(0, LINE(19), (uint8_t *)"aj3944, ms14845, ", CENTER_MODE);
+    lcd.DisplayStringAt(0, LINE(19), (uint8_t *)"aj3944,ms14845,ae2405", CENTER_MODE);
 }
 
 
