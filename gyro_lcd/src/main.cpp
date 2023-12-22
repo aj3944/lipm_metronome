@@ -1,5 +1,6 @@
 #include "mbed.h"
 #include "../lib/LCD_DISCO/LCD_DISCO_F429ZI.h"
+#include "../lib/LCD_DISCO/TS_DISCO_F429ZI.h"
 
 #define PI  3.14159265358979323846 
 #define EPSILON 0.000001
@@ -41,6 +42,22 @@
 #define FL (M) //Trapezoidal integrator
 #define DL (FL-1) //
 
+// LCD Touchscreen Configurations
+LCD_DISCO_F429ZI lcd;
+TS_DISCO_F429ZI ts;
+bool start_status = false;
+bool stats_status = false;
+
+// location and dimensions of start button
+#define START_X 10
+#define START_Y 10
+#define START_WIDTH 100
+#define START_HEIGHT 50
+// location and dimensions of stats button
+#define STATS_X 130
+#define STATS_Y 10
+#define STATS_WIDTH 100
+#define STATS_HEIGHT 50
 
 
 SPI spi(PF_9, PF_8, PF_7,PC_1,use_gpio_ssel); // mosi, miso, sclk, cs
@@ -150,11 +167,45 @@ EventFlags flags;
 //provided to it takes an int parameter
 void spi_cb(int event){
   flags.set(SPI_FLAG);
-  
-
 }
 
+
 LCD_DISCO_F429ZI lcd;
+void DrawButtons() {
+    int x_placement, y_placement;
+    char* label;
+    // checking start label status
+    if(!start_status) {label = "Start";}
+    else {label = "Stop";}
+    // Drawing the START/STOP button box
+    lcd.DrawRect(START_X, START_Y, START_WIDTH, START_HEIGHT);
+    x_placement = START_X + START_WIDTH/2 - strlen(label)*6;
+    y_placement = START_Y + START_HEIGHT/2 - 8;
+    // Writing START/STOP on the button
+    lcd.DisplayStringAt(x_placement, y_placement, (uint8_t *)label, LEFT_MODE);
+
+    // checking show stats status
+    if(!stats_status) {label="Stats";}
+    else {label="Back";}
+    // Drawing the STATS button box
+    lcd.DrawRect(STATS_X, STATS_Y, STATS_WIDTH, STATS_HEIGHT);
+    x_placement = STATS_X + STATS_WIDTH/2 - strlen(label)*6;
+    y_placement = STATS_Y + STATS_HEIGHT/2 - 8;
+    // Writing STATS on the button
+    lcd.DisplayStringAt(x_placement, y_placement, (uint8_t *)label, LEFT_MODE);
+}
+
+void HomeDisplay(float L, float vel) {
+    uint8_t text[30];
+    sprintf((char*)text, "Distance Travelled");
+    lcd.DisplayStringAt(0, LINE(5), (uint8_t *)text, CENTER_MODE);
+    sprintf((char*)text, "%f", L);
+    lcd.DisplayStringAt(0, LINE(6), (uint8_t *)text, CENTER_MODE);
+    sprintf((char*)text, "Current Velocity");
+    lcd.DisplayStringAt(0, LINE(8), (uint8_t *)text, CENTER_MODE);
+    sprintf((char*)text, "%f", vel);
+    lcd.DisplayStringAt(0, LINE(9), (uint8_t *)text, CENTER_MODE);
+}
 
 void data_cb(){
   flags.set(DATA_READY_FLAG);
@@ -387,21 +438,188 @@ void hadamardProduct1D(uint16_t f, uint16_t dim, float (*arr1)[1] , float (*arr2
 }
 
 
-void lcd_clear(){
-
-    // LCD INIT
-    lcd.Clear(LCD_COLOR_WHITE);
-    lcd.SetBackColor(LCD_COLOR_WHITE);
-    lcd.SetTextColor(LCD_COLOR_MAGENTA);
-    lcd.DisplayStringAt(0, LINE(0), (uint8_t *)"RTES/F23/MBED_CHLLNGEANGE", LEFT_MODE);
-    lcd.DisplayStringAt(0, 30, (uint8_t *)"X", LEFT_MODE);
-    lcd.DisplayStringAt(0, 130, (uint8_t *)"Y", LEFT_MODE);
-    lcd.DisplayStringAt(0, 230, (uint8_t *)"Z", LEFT_MODE);
-    lcd.DisplayStringAt(150, 305, (uint8_t *)"aj3944", LEFT_MODE);
-
+float dotProduct2(float *an, float *bn, int8_t f, int8_t dim){
+    if (debugSwitch) {printf("Start dotProduct============\n");}
+    int8_t i=0;
+    float r=0;
+    for (i=0 ; i<f; i++){
+        r= r + *(an+dim*i) * *(bn+dim*i);
+        if (debugSwitch) printf("dotI\t[%d]\t a=%f\t b=%f a*b=%f\n",i,*(an+dim*i),*(bn+dim*i), *(an+dim*i) * *(bn+dim*i));
+        
+    }
+    if (debugSwitch) {printf("r=%f\n",r);}
+    if (debugSwitch) {printf("End dotProduct============\n");}
+    return r;
+    
 }
-void lcd_dist_update(int dist){
 
+
+void crossProduct3d(float *an, float *vn){
+    //float ax=*(an);
+    //float ay=*(an+1);
+    //float az=*(an+2);
+
+    if (debugSwitch) {printf("Start Crossproduct====\n");}
+    *(vn) =   (*(an+1)) * zdim - (*(an+2)) * ydim;
+    *(vn+1) = (*(an+2)) * xdim - (*(an))   * zdim;
+    *(vn+2) = (*(an))   * ydim - (*(an+1)) * xdim;
+
+    //if (debugSwitch) {("A1 Ads : %p \t %p \t %p \n", an , an+1 , an+2);}
+    if (debugSwitch) {printf("A1 : [%f \t %f \t %f] \n", *(an) , *(an+1) , *(an+2));}
+    if (debugSwitch) {printf("Cross Product V : [%f \t %f \t %f] \n",*(vn),*(vn+1),*(vn+2));}
+    if (debugSwitch) {printf("End Crossproduct====\n");}
+    
+}
+
+
+
+void filterRectangle( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+            arr[i][j]=(float) 1/f;
+        }
+    }
+}
+
+
+void integratorTrapezoidal( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+            if (i==0 || i==f-1){
+                arr[i][j]=(float) ((float)1/2) * Ts2; // Ts2 is multiplied to accomodate the sampling frequency
+            }
+            else {arr[i][j]=(float) 1;}
+        }
+    }
+}
+
+void integratorTrapezoidal1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+            if (i==0 || i==f-1){
+                arr[i][j]=(float) ((float)1/2) * Ts2; // Ts2 is multiplied to accomodate the sampling frequency
+            }
+            else {arr[i][j]=(float) 1;}
+        }
+    }
+}
+
+
+void blackmanWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr[i][j]=(float) 0.42 - 0.5*cos(2*3.14*i/(f-1)) + 0.08*cos(4*3.14*i/(f-1));
+        }
+    }
+}
+
+void blackmanWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr[i][j]=(float) 0.42 - 0.5*cos(2*3.14*i/(f-1)) + 0.08*cos(4*3.14*i/(f-1));
+        }
+    }
+}
+
+
+void unitWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr[i][j]=(float) 1;
+        }
+    }
+}
+
+void unitWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr[i][j]=(float) 1;
+        }
+    }
+}
+
+int factorial(uint16_t *n){
+    uint16_t i=0, fact=1;
+    for(i=1 ; i<=*n ; i++){    
+      fact=fact*i;    
+    }
+    return fact;
+}
+
+
+float combination(uint16_t *a, uint16_t *b){
+    float comb=1;
+    uint16_t diff = *a - *b ;
+    if (debugSwitch) {printf("--a=%d \ta!=%d \n",  *a,factorial(a) );}
+    if (debugSwitch) {printf("--b=%d \tb!=%d \n",  *b,factorial(b) );}
+    if (debugSwitch) {printf("--a-b=%d \t(a-b)!=%d \n", diff, factorial(&diff) );}
+    comb = factorial(a)/(factorial(b) *factorial(&diff) ) ;///(factorial (b) * factorial (a-b));
+    if (debugSwitch) {printf ("combination= %f \n", comb);}
+    return comb;
+}
+
+void differentiator( uint16_t f, uint16_t dim, float (*arr)[3] ){//dim
+    uint16_t i=0,j=0, n=f-1;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr[i][j]=pow(-1,i) * combination(&n,&i) * (1/pow(Ts2,f-1)); //Multiplied by the 1/Tsample
+        }
+    }
+}
+
+void hadamardProduct(uint16_t f, uint16_t dim, float (*arr1)[3] , float (*arr2)[3] , float (*arr3)[3] ){//dim
+    if (debugSwitch) {printf("Start Haddamard Product======");}
+    if (debugSwitch) {printf("f=%d , dim=%d",f,dim);}
+    int i=0, j=0 ;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr3[i][j]= arr1[i][j] * arr2[i][j] ;
+                if (debugSwitch) {printf("i=%d\t j=%d\t arr1[%d][%d]=%f\t arr2[%d][%d]=%f\t product=%f",i,j, i,j, arr1[i][j], i,j, arr2[i][j], arr3[i][j] );}
+
+        }
+    }
+    if (debugSwitch) {printf("End Haddamard Product======");}
+}
+
+
+void hadamardProduct1D(uint16_t f, uint16_t dim, float (*arr1)[1] , float (*arr2)[1] , float (*arr3)[1] ){//dim
+    if (debugSwitch) {printf("Start Haddamard Product======");}
+    if (debugSwitch) {printf("f=%d , dim=%d",f,dim);}
+    int i=0, j=0 ;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr3[i][j]= arr1[i][j] * arr2[i][j] ;
+                if (debugSwitch) {printf("i=%d\t j=%d\t arr1[%d][%d]=%f\t arr2[%d][%d]=%f\t product=%f",i,j, i,j, arr1[i][j], i,j, arr2[i][j], arr3[i][j] );}
+
+        }
+    }
+    if (debugSwitch) {printf("End Haddamard Product======");}
+}
+
+
+void lcd_clear(){
+    
+    // LCD INIT
+    lcd.Clear(LCD_COLOR_BLUE);
+    lcd.SetBackColor(LCD_COLOR_BLUE);
+    lcd.SetTextColor(LCD_COLOR_WHITE);
+    lcd.DisplayStringAt(0, LINE(17), (uint8_t *)"RTES/F23/MBED_CHLLNGEANGE", LEFT_MODE);
+    // lcd.DisplayStringAt(0, 30, (uint8_t *)"X", LEFT_MODE);
+    // lcd.DisplayStringAt(0, 130, (uint8_t *)"Y", LEFT_MODE);
+    // lcd.DisplayStringAt(0, 230, (uint8_t *)"Z", LEFT_MODE);
+    lcd.DisplayStringAt(0, LINE(19), (uint8_t *)"aj3944", CENTER_MODE);
+    // BSP_LCD_SetFont(&Font20);
+    // BSP_LCD_SetFont(&LCD_DEFAULT_FONT);
+}
+
+void lcd_dist_update(int dist){
     // LCD INIT
     char rs[20] ;
     
