@@ -93,9 +93,11 @@ void gyro_actions(){
         //The total distance covered is the summation of the instantenous distances
         L=L+gL[w][0];
         printf(">Total Distance:%f\n",L);
-        Lint = Lint +  (int)(14.3*L); //magic number for human gait
+        Lint = Lint +  (int)(23.9*L); //magic number for human gait
+        if(!start_status){
+            Lint = 0;
+        }
         printf(">Interger Distance:%d\n",Lint);
-
         if(do_sample){       
             HomeDisplay(Lint,L);
             x_int = (int)(5000.0*g2[w][0]);

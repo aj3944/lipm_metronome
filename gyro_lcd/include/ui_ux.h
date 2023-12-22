@@ -35,7 +35,7 @@ void DrawButtons() {
     lcd.DisplayStringAt(x_placement, y_placement, (uint8_t *)label, LEFT_MODE);
 
     // checking show stats status
-    if(!stats_status) {label=(char *)"Stats";}
+    if(!stats_status) {label=(char *)"Graph";}
     else {label=(char *)"Back";}
     // Drawing the STATS button box
     lcd.DrawRect(STATS_X, STATS_Y, STATS_WIDTH, STATS_HEIGHT);
@@ -64,7 +64,7 @@ void lcd_clear(){
     // lcd.DisplayStringAt(0, 30, (uint8_t *)"X", LEFT_MODE);
 
     if(led_init && !start_status){
-        lcd.DisplayStringAt(10, LINE(10), (uint8_t *)"Press Start to begin!", LEFT_MODE);
+        lcd.DisplayStringAt(11, LINE(10), (uint8_t *)"Press Start to begin!", LEFT_MODE);
     }
 
     if(!led_init){
@@ -122,7 +122,7 @@ void do_touch(){
 
 
 void HomeDisplay(int L, float vel) {
-    if(stats_status){
+    if(!stats_status && start_status){
         uint8_t text[30];
         sprintf((char*)text, "Distance Travelled");
         lcd.DisplayStringAt(0, LINE(5), (uint8_t *)text, CENTER_MODE);
@@ -139,12 +139,12 @@ int prev_x = 0,prev_y = 0,prev_z = 0;
 
 void AddPoint(int x,int y,int z,int t){
     
-    if(!last_draw_graph && !stats_status){
+    if(!last_draw_graph && stats_status){
         lcd_clear();
         DrawButtons();
         last_draw_graph = true;
     }
-    if(!stats_status && start_status){
+    if(stats_status && start_status){
         lcd.SetTextColor(LCD_COLOR_RED);
         lcd.DrawLine(t-1,graph_sector(prev_x,0),t,graph_sector(x,0));
         lcd.SetTextColor(LCD_COLOR_GREEN);
