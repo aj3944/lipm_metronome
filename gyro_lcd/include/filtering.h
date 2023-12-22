@@ -1,61 +1,59 @@
 #include "mbed.h"
 
-#define PI  3.14159265358979323846 
-#define EPSILON 0.000001
-
 
 //Normalized coordinates for the radius in ; Linear Velocity = Angular Velocity X Radius, Radius values can be calibrated per indvidual length
 #define xdim 1
-#define ydim 0.1
-#define zdim 0.01
+#define ydim 1
+#define zdim 1
 
 
 #define d 3 //number of dim of gyroscope readings
-#define M 16 //Circular Buffer Length, number of samples in buffer per axis,  
+//Circular Buffer Length, number of samples in buffer per axis, The buffer will hold M samples (x[n], x[n-1],....,x[n-(M-1)])
+//So the buffer can provide up to D=M-1 Delayed samples, The initial status of write pointer will point to the current sample x[n] and initially will be at index=0 , 
+//the read pointer will point to the max delayed unit x[n - (M-1)] and will be at ; p = (w-D)%M = (0-D)%M = (M-D )%M = (1)%M = 1
+//Pointers will be updated as ; w=(w+1)%M and r=(r+1)%M
+//If we need to extract samples with Di delays, then we need Di+1 = Fi coefficients, so we need Fi samples = x[n],x[n-1],...x[n-(Di-1)] ,
+//So we can use the same buffer but with counter to the initial read pointer from k=r+(D-Di) till k=r+(D-Di)+Fi .
+#define M 16 
+#define F (M) //Supported Filter Coefficients , Number of Filter coefficients= (M-1) Delayed samples + 1 current , Fmax = M 
+#define D (M-1) //Supported Delayed Coefficients , The filter order 
 
-//Tune : Use Only in Debugging when manual values are inserted
-#define N 7  //number of readings provided by gyro per x-axis = inf/d
-#define inf ((N)*1) //number of samples taken from gyro, should be infinity
-//
+//Human step size has a max frequency of 1.5 Hz (1.5 step per second), the challenge requirement was to use 2 Hz sampling (1 sample per 0.5 seconds)
+//So we choose to process M-samples per 0.5 second, and aggregate the processing results in a slower buffer of length 40 as per the challenge requirements
+//The faster sampling rate is to provide smoother results with the DSP filters, so each processed M samples will construct a 1 2Hz sample in the 40-samples slower buffer.
 
-#define D (M-1) //Supported Delay Lines
-#define F (M) //Supported Filter Coefficients
-
-//Tune : Tsample
-#define Tdelay (0.5/M) //For Testing
-#define Ts2 Tdelay //For Testing
-
-#define F1 (M) //Filter coefficients, n Delays + 1 current, F <=M , Fmax=M
-#define D1 (F1-1) //Filter Order, Number of delay line samples, D=F-1 , Dmax = M-1, D<=M-1, this is for the Filter delay
-
-#define F2 (M) //integrator coefficients , n delay units, similar to F, odd , 3 is min for integrator
-#define D2 (F2-1) //integrator delay , n delay units, similar to D
-
-//Tune : Use Differentiator or not
-#define F3 (3) //First  Difference, x(n)-x(n-1)
-#define D3 (F3-1) //
-
-#define FL (M) //Trapezoidal integrator
-#define DL (FL-1) //
+//The faster sampling rate will have Tdelay = 0.5/M 
+#define Tdelay ((int) 0.5/M) //in seconds, in milliseconds = (0.5/(M)*1000)
+#define Ts2 1 //Normalized and compensated in the end by scaling, We tested other values like Ts2=Tdelay
+//We will use the same delay for the integrator, we could different sampling rates for the integrator and the data collection but we choose to align both
 
 
-static const bool debugSwitch=0;
-static const bool debugSwitch2=0;
-static const bool debugSwitch3=0;
+//We Define the filters orders separately to allow different tuning for the filters design
+
+//Filters Template :
+//A Full line filter that is using all delay units can be defined in this templte ; 
+//#define F1 (M) //Filter coefficients, n Delays + 1 current, F <=M , Fmax=M
+//#define D1 (F1-1) //Filter Order, Number of delay line samples, D=F-1 , Dmax = M-1, D<=M-1, this is for the Filter delay
+
+#define F2 (M) //Trapezoidal integrator coefficients array , (M-1) delay units + 1 current sample to give total M samples, should be odd to staisfiy Linear FIR requirements, so min integrator = 3
+#define D2 (F2-1) //The number of supported delay units, which is the filter order.
 
 
 
-void printArri(float *a, int8_t K){
-    if (debugSwitch) {printf("Start printArri\n============\n");}
-    uint8_t i=0;
-    //printf("%d \t\n",S);
-    for (i=0 ; i<K ; i++){
-        printf("%d \t %f \n",i,*(a+i));
-    }
-    if (debugSwitch) {printf("End printArri\n============\n");}
-}
+#define FL (M) //Trapezoidal integrator coefficients array, used to integrate the velocity to get the instantaneous distance
+#define DL (FL-1) //The number of supported delay units, which is the filter order.
 
-void printArr2d(float *a, int8_t k1, int8_t k2){ //k1 row, k2 col
+
+static const bool debugSwitch=1;  //Print functiosn processing and outputs if enabled
+static const bool debugSwitch2=0; //Print the fast buffered signals M-samples, sampled at 0.5/M seconds in teleplot-compatible format
+static const bool debugSwitch3=1; //Print the Arrays on every reading
+static const bool debugSwitch4=0; //Print the slow buffer(40-samples), sampled at 0.5 seconds in teleplot-compatible format
+
+
+
+
+void printArr2d(float *a, int8_t k1, int8_t k2){ 
+    //Prints a 2-dimensional float array with k1 rows, k2 columns
     if (debugSwitch) {printf("Start printArr2d\n============\n");}
     uint8_t i=0,j=0,k=0;
     for (i=0 ; i<k1 ; i++){
@@ -68,7 +66,8 @@ void printArr2d(float *a, int8_t k1, int8_t k2){ //k1 row, k2 col
     if (debugSwitch) {printf("End printArr2d\n============\n");}
 }
 
-void printArr2dInt(int16_t *a, int8_t k1, int8_t k2){ //k1 row, k2 col
+void printArr2dInt(int16_t *a, int8_t k1, int8_t k2){ 
+    //Prints a 2-dimensional integer array with k1 rows, k2 columns
     if (debugSwitch) {printf("Start---printArr2dInt\n");}
     uint8_t i=0,j=0,k=0;
     for (i=0 ; i<k1 ; i++){
@@ -84,7 +83,9 @@ void printArr2dInt(int16_t *a, int8_t k1, int8_t k2){ //k1 row, k2 col
 
 
 
-float dotProduct2(float *an, float *bn, int8_t f, int8_t dim){
+float dotProduct2(float *an, float *bn, int8_t f, int8_t dim){ 
+    //returns dotP = a dot product b , where a and b are 2-dim arrays with f rows and dim columns,
+    //this version requires dim=1 always
     if (debugSwitch) {printf("Start dotProduct============\n");}
     int8_t i=0;
     float dotP=0;
@@ -100,8 +101,11 @@ float dotProduct2(float *an, float *bn, int8_t f, int8_t dim){
 }
 
 
-void crossProduct3d(float *an, float *vn){
-    // The x,y,z coordinates of an ;
+void crossProduct3d(float *an, float *vn){ 
+    //returns vn vector = an corss product the x,y,z dimensions defined in the #define section
+    //mainly used to calculate the linear velocity components vx,vy and vz from angular velocity gx,gy,gz
+    //In this version the angular velocity provided as an argument is typyically an integrated version g2 to provide smoother angular velocities
+    // The x,y,z coordinates of vector an (the gyro filtered signal) is ;
     // ax=*(an);
     // ay=*(an+1);
     // az=*(an+2);
@@ -111,7 +115,7 @@ void crossProduct3d(float *an, float *vn){
     *(vn+1) = (*(an+2)) * xdim - (*(an))   * zdim;
     *(vn+2) = (*(an))   * ydim - (*(an+1)) * xdim;
 
-    // if (debugSwitch) {("Cross Product Input an Address : %p \t %p \t %p \n", an , (an+1) , (an+2));}
+    if (debugSwitch) {printf("Cross Product Input an Address : %p \t %p \t %p \n", an , an+1 , an+2);}
     if (debugSwitch) {printf("Cross Product Input an : [%f \t %f \t %f] \n", *(an) , *(an+1) , *(an+2));}
     if (debugSwitch) {printf("Cross Product Result vn : [%f \t %f \t %f] \n",*(vn),*(vn+1),*(vn+2));}
     if (debugSwitch) {printf("End Crossproduct====\n");}
@@ -120,7 +124,11 @@ void crossProduct3d(float *an, float *vn){
 
 
 
-void filterRectangle( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
+
+void filterRectangle( uint16_t f, uint16_t dim, float (*arr)[3]){
+    //fills in the array arr witha an f filter coefficients x dim dimensions rectangular filter, with Tsampling considered
+    //e.g. to generate  matrix arr with a 3rd order (4-delayed samples) x 3 dim filter ==> filterRectangle(4,3,&arr[0][0]) :
+    //gives a 4x3 matrix where each column = Tsampling * [1/4, 1/4 , 1/4 , 1/4] for each dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
             for (i=0 ; i<f ; i++){
@@ -130,7 +138,10 @@ void filterRectangle( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
 }
 
 
-void integratorTrapezoidal( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
+void integratorTrapezoidal( uint16_t f, uint16_t dim, float (*arr)[3]){
+    //fills in the array arr witha an f filter coefficients x dim dimensions trapezoidal filter for integrator, with Tsampling considered
+    //e.g. to generate a matrix arr with a 3rd order (4-delayed samples) x 3 dim filter ==> integratorTrapezoidal(4,3,&arr[0][0]) : 
+    //gives a 4x3 matrix where each column = Tsampling * [1/2, 1 , 1 , 1/2] for each dim
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
             for (i=0 ; i<f ; i++){
@@ -142,7 +153,10 @@ void integratorTrapezoidal( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
     }
 }
 
-void integratorTrapezoidal1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
+void integratorTrapezoidal1D( uint16_t f, uint16_t dim, float (*arr)[1]){
+    //fills in the array arr witha an f filter coefficients 1 dim dimensions trapezoidal filter for integrator, with Tsampling considered
+    //e.g. to generate a matrix arr with a 3rd order (4-delayed samples) x 1 dim filter ==> integratorTrapezoidal1D(4,1,&arr[0][0]) : 
+    // gives a 4x1 matrix where the only column = Tsampling * [1/2, 1 , 1 , 1/2]
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
             for (i=0 ; i<f ; i++){
@@ -155,7 +169,12 @@ void integratorTrapezoidal1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
 }
 
 
-void blackmanWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
+void blackmanWindow( uint16_t f, uint16_t dim, float (*arr)[3]){
+    //fills in the array arr with a fxdim matrix of Blackman Window coefficients, Window functions are used to mitigate the finite window effect instead of truncating the filters which
+    //could cause high frequency components due to the abrupt changes
+    //Blackman window is used as it one of the common window functions
+    //e.g. to generate a matrix arr with a 3rd order (4-delayed samples) x 3 dim filter ==> blackmanWindow(4,3,&arr[0][0]) :
+    // gives a 4x3 matrix where each column = [4 blackman coefficients]
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
             for (i=0 ; i<f ; i++){
@@ -164,7 +183,10 @@ void blackmanWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
     }
 }
 
-void blackmanWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
+void blackmanWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){
+    //same like blackmanWindow but for a 1-dimensional array, i.e.
+    //e.g. to generate a matrix arr with a 3rd order (4-delayed samples) x 1 dim filter ==> blackmanWindow(4,1,&arr[0][0]) :
+    // gives a 4x1 matrix where each column = [4 blackman coefficients]
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
             for (i=0 ; i<f ; i++){
@@ -174,7 +196,19 @@ void blackmanWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
 }
 
 
-void unitWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
+void unitWindow( uint16_t f, uint16_t dim, float (*arr)[3]){
+    //Used for debugging only, fills arr with a unit window coefficients giving a fxdim all "1"s matrix , 
+    //to allow easier debugging of integrator/differentiator filters
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr[i][j]=(float) 1;
+        }
+    }
+
+void unitWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){
+    //Used for debugging only, similar to unitWindow but for 1D , fills arr with unit window coefficients giving a fx1 all "1"s matrix , to
+    // allow easier debugging of integrator/differentiator filters
     uint8_t i=0,j=0;
         for (j=0; j<dim ; j++){
             for (i=0 ; i<f ; i++){
@@ -183,57 +217,13 @@ void unitWindow( uint16_t f, uint16_t dim, float (*arr)[3]){//dim
     }
 }
 
-void unitWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){//dim
-    uint8_t i=0,j=0;
-        for (j=0; j<dim ; j++){
-            for (i=0 ; i<f ; i++){
-                arr[i][j]=(float) 1;
-        }
-    }
-}
-long long int FACT_ARRAY[M];
 
-long long int factorial(uint16_t *n){
-    if(!FACT_ARRAY[*n] == 0){
-        uint16_t i=0, fact=1;
-        for(i=1 ; i<=*n ; i++){
-        fact=fact*i;
-        }
-        FACT_ARRAY[*n] = fact;
-        return fact;
-    }else{
-        return FACT_ARRAY[*n];
-    }
-}
-float COMB_ARRAY[M][M];
 
-float combination(uint16_t *a, uint16_t *b){
-    if(!COMB_ARRAY[*a][*b] == 0){
-        float comb=1;
-        uint16_t diff = *a - *b ;
-        if (debugSwitch) {printf("--a=%d \ta!=%lld \n",  *a,factorial(a) );}
-        if (debugSwitch) {printf("--b=%d \tb!=%lld \n",  *b,factorial(b) );}
-        if (debugSwitch) {printf("--a-b=%d \t(a-b)!=%lld \n", diff, factorial(&diff) );}
-        comb = factorial(a)/(factorial(b) *factorial(&diff) ) ;///(factorial (b) * factorial (a-b));
-        if (debugSwitch) {printf ("combination= %f \n", comb);}
-        COMB_ARRAY[*a][*b] = comb;
-        return comb;
-    }else{
-        return COMB_ARRAY[*a][*b];
-    }
-}
-
-void differentiator( uint16_t f, uint16_t dim, float (*arr)[3] ){//dim
-    uint16_t i=0,j=0, n=f-1;
-        for (j=0; j<dim ; j++){
-            for (i=0 ; i<f ; i++){
-                arr[i][j]=pow(-1,i) * combination(&n,&i) * (1/pow(Ts2,f-1)); //Multiplied by the 1/Tsample
-        }
-    }
-}
-
-void hadamardProduct(uint16_t f, uint16_t dim, float (*arr1)[3] , float (*arr2)[3] , float (*arr3)[3] ){//dim
-    if (debugSwitch) {printf("Start Haddamard Product======\n");}
+void hadamardProduct(uint16_t f, uint16_t dim, float (*arr1)[3] , float (*arr2)[3] , float (*arr3)[3] ){
+    // hadamard product is the element-wise multiplication, used to multiply window function coefficients with filter coefficients to "window" the filters coefficients
+    // usage hadamardProduct(F2,d,W2,H2,H2); H2 = W2 * H2 element-wise , where all matrices are F2xd dimensions,
+    // W2 is a window function matrix, H2 is a matrix for filter coefficients
+    if (debugSwitch) {printf("Start hadamardProduct Product======\n");}
     if (debugSwitch) {printf("f=%d , dim=%d\n",f,dim);}
     int i=0, j=0 ;
         for (j=0; j<dim ; j++){
@@ -243,12 +233,15 @@ void hadamardProduct(uint16_t f, uint16_t dim, float (*arr1)[3] , float (*arr2)[
 
         }
     }
-    if (debugSwitch) {printf("End Haddamard Product======\n");}
+    if (debugSwitch) {printf("End hadamardProduct Product======\n");}
 }
 
 
 void hadamardProduct1D(uint16_t f, uint16_t dim, float (*arr1)[1] , float (*arr2)[1] , float (*arr3)[1] ){//dim
-    if (debugSwitch) {printf("Start Haddamard Product======\n");}
+    // hadamardProduct1D this is similar to hadamardProduct but for 1 dimensions
+    // usage hadamardProduct1D(F2,1,W2,H2,H2); H2 = W2 * H2 element-wise , where all matrices are F2x1 dimensions,
+    // W2 is a window function matrix, H2 is a matrix for filter coefficients
+    if (debugSwitch) {printf("Start hadamardProduct Product======\n");}
     if (debugSwitch) {printf("f=%d , dim=%d\n",f,dim);}
     int i=0, j=0 ;
         for (j=0; j<dim ; j++){
@@ -258,51 +251,55 @@ void hadamardProduct1D(uint16_t f, uint16_t dim, float (*arr1)[1] , float (*arr2
 
         }
     }
-    if (debugSwitch) {printf("End Haddamard Product======\n");}
+    if (debugSwitch) {printf("End hadamardProduct Product======\n");}
 }
 
-float gyro[M][d] = {0}; //initialie gyro buffer
 int16_t gyroRead[M][d] = {0}; //initialie gyro direct reading
+float gyro[M][d] = {0}; //Buffer to hold gyro scaled readings
 
-/* Tune : Use a full length integrator, i.e. Delay units = Buffer Size M - 1
+/* Template : Use a full length integrator, i.e. Delay units = Buffer Size M - 1
 float H1[F1][d]; //initialize Filter Coefficients1
 float a1[F1][d] = {0}; //initialie filter input samples, multiplied by the filter coefficients
 float g1[M][d]={0}; //initialize filtered gyro buffer, output of dot product after being processed by filters.
 float W1[F1][d]; //initialize Blackman Window Coefficients
 */
 
-float H2[F2][d]; //initialize Non-Windowed Filter Coefficients for integrator
+//For Trapezoidal integrator applied to the gyro scaled values
+float H2[F2][d]; //initialize Non-Windowed Filter Coefficients for integrator,  filter size is F2 that can <= M , in this example F2=M ==> have M-1 delays and 1 current
+float W2[F2][d]; //initialize Window Coefficients that will be used to "window" the filter coefficients to avoid abrupt truncation
 float a2[F2][d] = {0}; //initialize a buffer to keep the last (D2) samples + the current samples (x[n],x[n-1],..,x[n-(D1-1)]) to be used in integrator 
-float g2[M][d]={0}; //initialize filtered gyro buffer, output of dot product after being processed by filters.
-float W2[F2][d]; //initialize Filter Coefficients1
+float g2[M][d]={0}; //initialize a buffer to hold the filtered gyro samples After applying the windowed filters
 
 
-float H3[F3][d]; //initialize Filter Coefficients1
-// float a3[F3][d] = {0}; //initialie filter input samples, multiplied by the filter coefficients
-float g3[M][d]={0}; //initialize filtered gyro buffer, output of dot product after being processed by filters.
-float W3[F3][d]; //initialize Filter Coefficients1
-
-
+//For the x,y,z velocity, Linear velocity magnitude, instantaneous distance and total distance
 float V[M][d]={0}; //Linear Velocity x,y,z components calculated from corss angular with chip dim
-float VLinear[M][1]={0}; //Linear Velocity Magnitude
-float HL[FL][1]={0}; //initialize Filter Coefficients for processing Linear Velocity Delayed Samples
-float aL[M][1]={0}; //List of Linear Velocity Magnitudes current and delayed to be used in processing
+float VLinear[M][1]={0}; //Linear Velocity Magnitude, V = Squrt (Vx^2 + Vy^2 + Vz^2)
+float HL[FL][1]={0}; //initialize Filter Coefficients for the trapezoidal integrator filter coefficients
 float WL[FL][1]; //initialize Blackman Coefficients for Windowing the Filters Coefficients
+float aL[FL][1]={0}; //initialize a buffer to keep the last FL delayed Linear Velocity Magnitude Samples to be used in the integration 
+float gL[M][1]={0}; //Distance instantaneous resulted from integrating the delayed FL samples from VLinear (integration of aL)
+float L=0, vL2=0 ; //Total Distance , and Linear Velocity Squared accumulator 
 
-float gL[M][1]={0}; //Distance instantaneous resulted from integrating or corss product of VLinear
-float L=0, vL2 ; //Total Distance , and Linear Velocity Squared accumulator 
+//Buffer of 40 samples filled every 0.5 seconds by the M-th processed faster buffer samples.
+//i.e. the Main fast buffer samples and processes the gyro readings every 0.5/M seconds, so every M-gyro readings will happen every 0.5 seconds ,and this
+//M-sample from the fast buffer will fill in 1 sample from the slower 40-samples buffer
+//So all of these buffers are the processed values from the faster buffer, but slower
+int16_t gyroReadSlow[40][d]={0} ; //to hold gyro readings
+float gyroSlow[40][d]={0} ;   //to hold scaled gyro samples
+float g2Slow[40][d]={0} ;   //to hold integrated gyro samples
+float VSlow[40][d]={0} ;  //to hold Velocity in x,y,z 
+float VLinearSlow[40][1]={0} ;  //to hold Linear Velocity Magnitude
+float gLSlow[40][1]={0} ;   //To hold instantenous distance
+float LSlow=0 ;  //to hold the total distance
 
-int16_t gyroReadSlow[40][d]={0} ;  
-float gyroSlow[40][d]={0} ;  
-float g2Slow[40][d]={0} ;  
-float VSlow[40][d]={0} ;  
-float VLinearSlow[40][1]={0} ;  
-float gLSlow[40][1]={0} ;  
-float LSlow=0 ;  
 
-int Lint = 0;
+// Lint is defined hold the approximate scaled total distance, the scaling can be calibrated and it compensates for 
+// the filters gains and the non fixed radius in the cross product equation  VLinear = angular fequency x radius
+int Lint = 0; 
 
-int8_t i=0,j=0,k=0, t=0; //i for gyro readings counter, j for dim counter, k for filter coefficients, t for sample number
+//s for gyro readings counter to fill the slow buffer , j for dimension counter x,y and z , k for filter coefficients counter, t for sample number
+int8_t i=0,j=0,k=0, t=0; 
+    
 
 
 int8_t w=0, r=(M+w-D)%M , v=0;
@@ -313,84 +310,52 @@ void init_filters(){
 
     printf("Start Init \n");
     
-    /*
+    /* Template for Defining Filters with Window functions : Using Averaging
     filterRectangle(F1,d,H1);
     printf("--Moving Average Filter--\n");
-    printArr2d(&H1[0][0],F1,d);// Filters
-    */
-    
-    
-    integratorTrapezoidal(F2,d,H2);
-    printf("--Trapezoidal Integrator Filter--\n");
-    printArr2d(&H2[0][0],F2,d);// Filters
-
-    
-    
-    differentiator(F3,d,H3);
-    printf("--Differentiator Filter--\n");
-    printArr2d(&H3[0][0],F3,d);// Filters
-    
-    
-    integratorTrapezoidal1D(FL,1,HL);
-    printf("--1 Dimensional Integrator Filter--\n");
-    printArr2d(&HL[0][0],FL,1);// Filters
-    
-    /*
+    printArr2d(&H1[0][0],F1,d);
     blackmanWindow(F1,d,W1);
+    if (debugSwitch) {unitWindow(F1,d,W1);}
     printf("--Blackman Window Coefficients for Moving Average Filter--\n");
-    printArr2d(&W1[0][0],F1,d);// Filters
+    printArr2d(&W1[0][0],F1,d);
     printf("--Moving Average Filter with Blackman Window--\n");
     hadamardProduct(F1,d,W1,H1,H1);
-    printArr2d(&H1[0][0],F1,d);// Filters
-    */
+    printArr2d(&H1[0][0],F1,d);
+    */   
 
+
+    
+    
+    // Prepare integrator for scaled gyro values,
+    // H2 : Filter integrator coefficients, F2: the filter order+1 = size of filter , W2 : The Window Coefficients , all with size F2 * d matrices
+    integratorTrapezoidal(F2,d,H2);
+    printf("--Trapezoidal Integrator Filter--\n");
+    printArr2d(&H2[0][0],F2,d);
     blackmanWindow(F2,d,W2);
-    //unitWindow(F2,d,W2);
+    if (debugSwitch) {unitWindow(F2,d,W2);}
     printf("--Blackman Window Coefficients for Trapezoidal Integrator--\n");
-    printArr2d(&W2[0][0],F2,d);// Filters
+    printArr2d(&W2[0][0],F2,d);
     hadamardProduct(F2,d,W2,H2,H2);
     printf("--Trapezoidal Integrator Filter with Blackman Window--\n");
-    printArr2d(&H2[0][0],F2,d);// Filters
+    printArr2d(&H2[0][0],F2,d);
 
     
-    blackmanWindow(F3,d,W3);
-    //unitWindow(F2,d,W2);
-    printf("--Blackman Window Coefficients for Differentiator--\n");
-    printArr2d(&W3[0][0],F3,d);// Filters
-    hadamardProduct(F3,d,W3,H3,H3);
-    printArr2d(&H3[0][0],F3,d);// Filters
-    
-
+    // Prepare integrator for Linear Velocity in 1 dimension,
+    // HL : Filter integrator coefficients, FL: the filter order+1 = size of filter , WL : The Window Coefficients , all with size FL * 1 matrices    
+    integratorTrapezoidal1D(FL,1,HL);
+    printf("--1 Dimensional Integrator Filter--\n");
+    printArr2d(&HL[0][0],FL,1);
     blackmanWindow1D(FL,1,WL);
-    //unitWindow1D(FL,1,WL);
+    if (debugSwitch) {unitWindow1D(FL,1,WL);}
     printf("--Blackman Window Coefficients for Differentiator--\n");
-    printArr2d(&WL[0][0],FL,1);// Filters
+    printArr2d(&WL[0][0],FL,1);
     hadamardProduct1D(FL,1,WL,HL,HL);
-    printArr2d(&HL[0][0],FL,1);// Filters
-
+    printArr2d(&HL[0][0],FL,1);
+        
 
     printf("Initial\n");
-    //printf("---- M=%d \tF=%d \tD=%d \tdim=%d \tinf=%d \tsamplPerAxs=%d \n", M, F, D, d, inf , N );
     printf("--w=%d \tr=%d \tv=%d \tt=%d\n", w,r,v,t );
-    printf("Start Gyro\n");    
+    printf("Start Gyro\n");
+
+ 
 }
-
-
-        /* Tune : Apply a full length integrator or not
-        //Start Signal Prep block
-        v=D1;
-        //printf("===Start Prep\n");
-        for (k=r+(D-D1) ; k < r+(D-D1)+F1 ; k++ ){
-            a1[v][j]=gyro[k%M][j];
-            //printf("w=%d \tr=%d \tk=%d \tk%M=%d \t deltaDelay=%d  \t v=%d \t D=%d, Di=%d, a1[%d][%d]=%f \t gyro[%d][%d]=%f \t ads=%p\n", w, r,k,k%M, (D-D1) ,v ,D,D1,v,j ,a1[v][j],    k%M , j, gyro[k%M][j] , &a1[k][j]);
-            v=v-1;
-        }
-        //printf("===End Prep\n");
-        //printf("===Start Filtered\n");
-        g1[w][j]= dotProduct2(&a1[0][j], &H1[0][j],F1,d); 
-        //printf(">i=%d \t w=%d \t r1=%d \t r1+(D1-D1)=%d \t g2[%d][%d]=%f \n",i, w,r1,r1+(D1-D2), w,j,g3[w][j]);
-        //printf("w=%d \tr=%d \t(Delta Delay)=%d \t ri=r+deltaDelay=%d \tg1[%d][%d]=%f ads=%p\n", w, r, (D-D1) , r+(D-D1),w ,j ,g1[w][j], &g1[w][j]    );
-        //printf("===End Filtered\n");
-        //End Signal Prop Block
-        */
-        
