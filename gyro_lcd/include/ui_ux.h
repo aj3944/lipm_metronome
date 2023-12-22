@@ -1,12 +1,6 @@
 #include "mbed.h"
-
-int led_init = 0;
-// LCD Touchscreen Configurations
-LCD_DISCO_F429ZI lcd;
-TS_DISCO_F429ZI ts;
-bool start_status = false;
-bool stats_status = false;
-
+//Unused Variable
+//int led_init = 0;
 // location and dimensions of start button
 #define START_X 10
 #define START_Y 10
@@ -18,7 +12,19 @@ bool stats_status = false;
 #define STATS_WIDTH 100
 #define STATS_HEIGHT 50
 
-bool last_draw_graph = false;
+// LCD Touchscreen Configurations
+LCD_DISCO_F429ZI lcd;
+TS_DISCO_F429ZI ts;
+
+
+//Unused Variable
+//bool start_status = false;
+//bool stats_status = false;
+
+
+
+//Unused Variable
+//bool last_draw_graph = false;
 
 
 void DrawButtons() {
@@ -135,7 +141,7 @@ void HomeDisplay(int L, float vel) {
         last_draw_graph = false;
     }
 }
-int prev_x = 0,prev_y = 0,prev_z = 0;
+//int prev_x = 0,prev_y = 0,prev_z = 0;
 
 void AddPoint(int x,int y,int z,int t){
     

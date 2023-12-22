@@ -25,10 +25,10 @@ Thread touch_thread;
 Thread gyro_thread;
 
 
-bool do_sample = true;
+//bool do_sample = true;
 
 //Counter to clear the screen and rotate the samples count
-int t = 0;
+int8_t t = 0;
 
 
 

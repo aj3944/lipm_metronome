@@ -87,8 +87,9 @@ InterruptIn int2(PA_2,PullDown);
 
 EventFlags flags;
 
-uint8_t write_buf[32]; 
-uint8_t read_buf[32];
+//Unused Variables
+//uint8_t write_buf[32]; 
+//uint8_t read_buf[32];
 
 void spi_cb(int event){
   flags.set(SPI_FLAG);
@@ -96,7 +97,7 @@ void spi_cb(int event){
 
 void data_cb(){
   flags.set(DATA_READY_FLAG);
-};
+}
 
 void init_spi(){
     spi.format(8,3);

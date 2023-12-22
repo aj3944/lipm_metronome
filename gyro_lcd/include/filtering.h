@@ -44,12 +44,46 @@
 #define DL (FL-1) //The number of supported delay units, which is the filter order.
 
 
+
 static const bool debugSwitch=1;  //Print functiosn processing and outputs if enabled
 static const bool debugSwitch2=0; //Print the fast buffered signals M-samples, sampled at 0.5/M seconds in teleplot-compatible format
 static const bool debugSwitch3=1; //Print the Arrays on every reading
 static const bool debugSwitch4=0; //Print the slow buffer(40-samples), sampled at 0.5 seconds in teleplot-compatible format
 
 
+int16_t gyroRead[M][d] = {0}; //initialie gyro direct reading
+float gyro[M][d] = {0}; //Buffer to hold gyro scaled readings
+
+/* Template : Use a full length integrator, i.e. Delay units = Buffer Size M - 1
+float H1[F1][d]; //initialize Filter Coefficients1
+float a1[F1][d] = {0}; //initialie filter input samples, multiplied by the filter coefficients
+float g1[M][d]={0}; //initialize filtered gyro buffer, output of dot product after being processed by filters.
+float W1[F1][d]; //initialize Blackman Window Coefficients
+*/
+
+//For Trapezoidal integrator applied to the gyro scaled values
+float H2[F2][d]; //initialize Non-Windowed Filter Coefficients for integrator,  filter size is F2 that can <= M , in this example F2=M ==> have M-1 delays and 1 current
+float W2[F2][d]; //initialize Window Coefficients that will be used to "window" the filter coefficients to avoid abrupt truncation
+float a2[F2][d] = {0}; //initialize a buffer to keep the last (D2) samples + the current samples (x[n],x[n-1],..,x[n-(D1-1)]) to be used in integrator 
+float g2[M][d]={0}; //initialize a buffer to hold the filtered gyro samples After applying the windowed filters
+
+
+//For the x,y,z velocity, Linear velocity magnitude, instantaneous distance and total distance
+float V[M][d]={0}; //Linear Velocity x,y,z components calculated from corss angular with chip dim
+float VLinear[M][1]={0}; //Linear Velocity Magnitude, V = Squrt (Vx^2 + Vy^2 + Vz^2)
+float HL[FL][1]={0}; //initialize Filter Coefficients for the trapezoidal integrator filter coefficients
+float WL[FL][1]; //initialize Blackman Coefficients for Windowing the Filters Coefficients
+float aL[FL][1]={0}; //initialize a buffer to keep the last FL delayed Linear Velocity Magnitude Samples to be used in the integration 
+float gL[M][1]={0}; //Distance instantaneous resulted from integrating the delayed FL samples from VLinear (integration of aL)
+float L=0, vL2=0 ; //Total Distance , and Linear Velocity Squared accumulator 
+
+// Lint is defined hold the approximate scaled total distance, the scaling can be calibrated and it compensates for 
+// the filters gains and the non fixed radius in the cross product equation  VLinear = angular fequency x radius
+int Lint = 0; 
+
+//s for gyro readings counter to fill the slow buffer , j for dimension counter x,y and z , k for filter coefficients counter, t for sample number
+uint8_t i=0,j=0,k=0, t=0; 
+uint16_t w=0, r=(M+w-D)%M , v=0;
 
 
 void printArr2d(float *a, int8_t k1, int8_t k2){ 
@@ -254,45 +288,6 @@ void hadamardProduct1D(uint16_t f, uint16_t dim, float (*arr1)[1] , float (*arr2
     if (debugSwitch) {printf("End hadamardProduct Product======\n");}
 }
 
-int16_t gyroRead[M][d] = {0}; //initialie gyro direct reading
-float gyro[M][d] = {0}; //Buffer to hold gyro scaled readings
-
-/* Template : Use a full length integrator, i.e. Delay units = Buffer Size M - 1
-float H1[F1][d]; //initialize Filter Coefficients1
-float a1[F1][d] = {0}; //initialie filter input samples, multiplied by the filter coefficients
-float g1[M][d]={0}; //initialize filtered gyro buffer, output of dot product after being processed by filters.
-float W1[F1][d]; //initialize Blackman Window Coefficients
-*/
-
-//For Trapezoidal integrator applied to the gyro scaled values
-float H2[F2][d]; //initialize Non-Windowed Filter Coefficients for integrator,  filter size is F2 that can <= M , in this example F2=M ==> have M-1 delays and 1 current
-float W2[F2][d]; //initialize Window Coefficients that will be used to "window" the filter coefficients to avoid abrupt truncation
-float a2[F2][d] = {0}; //initialize a buffer to keep the last (D2) samples + the current samples (x[n],x[n-1],..,x[n-(D1-1)]) to be used in integrator 
-float g2[M][d]={0}; //initialize a buffer to hold the filtered gyro samples After applying the windowed filters
-
-
-//For the x,y,z velocity, Linear velocity magnitude, instantaneous distance and total distance
-float V[M][d]={0}; //Linear Velocity x,y,z components calculated from corss angular with chip dim
-float VLinear[M][1]={0}; //Linear Velocity Magnitude, V = Squrt (Vx^2 + Vy^2 + Vz^2)
-float HL[FL][1]={0}; //initialize Filter Coefficients for the trapezoidal integrator filter coefficients
-float WL[FL][1]; //initialize Blackman Coefficients for Windowing the Filters Coefficients
-float aL[FL][1]={0}; //initialize a buffer to keep the last FL delayed Linear Velocity Magnitude Samples to be used in the integration 
-float gL[M][1]={0}; //Distance instantaneous resulted from integrating the delayed FL samples from VLinear (integration of aL)
-float L=0, vL2=0 ; //Total Distance , and Linear Velocity Squared accumulator 
-
-
-
-// Lint is defined hold the approximate scaled total distance, the scaling can be calibrated and it compensates for 
-// the filters gains and the non fixed radius in the cross product equation  VLinear = angular fequency x radius
-int Lint = 0; 
-
-//s for gyro readings counter to fill the slow buffer , j for dimension counter x,y and z , k for filter coefficients counter, t for sample number
-int8_t i=0,j=0,k=0, t=0; 
-    
-
-
-int8_t w=0, r=(M+w-D)%M , v=0;
-
 
 void init_filters(){
 
@@ -348,3 +343,5 @@ void init_filters(){
 
  
 }
+
+
