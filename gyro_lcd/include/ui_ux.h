@@ -63,14 +63,15 @@ void lcd_clear(){
     lcd.DisplayStringAt(0, LINE(17), (uint8_t *)"RTES/F23/MBED_CHLLNGEANGE", LEFT_MODE);
     // lcd.DisplayStringAt(0, 30, (uint8_t *)"X", LEFT_MODE);
 
+    if(led_init && !start_status){
+        lcd.DisplayStringAt(10, LINE(10), (uint8_t *)"Press Start to begin!", LEFT_MODE);
+    }
+
     if(!led_init){
         led_init = 1;
         lcd.DisplayStringAt(10, LINE(10), (uint8_t *)"wait..init..", LEFT_MODE);
     }
 
-    if(led_init && !start_status){
-        lcd.DisplayStringAt(10, LINE(10), (uint8_t *)"Press Start to begin!", LEFT_MODE);
-    }
     // lcd.DisplayStringAt(0, 130, (uint8_t *)"Y", LEFT_MODE);
     // lcd.DisplayStringAt(0, 230, (uint8_t *)"Z", LEFT_MODE);
     lcd.DisplayStringAt(0, LINE(19), (uint8_t *)"ae2405", LEFT_MODE);
@@ -143,7 +144,7 @@ void AddPoint(int x,int y,int z,int t){
         DrawButtons();
         last_draw_graph = true;
     }
-    if(!stats_status){
+    if(!stats_status && start_status){
         lcd.SetTextColor(LCD_COLOR_RED);
         lcd.DrawLine(t-1,graph_sector(prev_x,0),t,graph_sector(x,0));
         lcd.SetTextColor(LCD_COLOR_GREEN);

@@ -111,7 +111,7 @@ void crossProduct3d(float *an, float *vn){
     *(vn+1) = (*(an+2)) * xdim - (*(an))   * zdim;
     *(vn+2) = (*(an))   * ydim - (*(an+1)) * xdim;
 
-    if (debugSwitch) {("Cross Product Input an Address : %p \t %p \t %p \n", an , (an+1) , (an+2));}
+    // if (debugSwitch) {("Cross Product Input an Address : %p \t %p \t %p \n", an , (an+1) , (an+2));}
     if (debugSwitch) {printf("Cross Product Input an : [%f \t %f \t %f] \n", *(an) , *(an+1) , *(an+2));}
     if (debugSwitch) {printf("Cross Product Result vn : [%f \t %f \t %f] \n",*(vn),*(vn+1),*(vn+2));}
     if (debugSwitch) {printf("End Crossproduct====\n");}

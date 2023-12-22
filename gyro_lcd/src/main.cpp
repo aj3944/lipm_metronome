@@ -33,7 +33,7 @@ void touch_actions(){
     while(1){
         do_touch();
         DrawButtons();
-        ThisThread::sleep_for(300);
+        ThisThread::sleep_for(200ms);
     }
 }
 
@@ -45,8 +45,8 @@ void gyro_actions(){
 
     while(1)
     {
-        unsigned int mills_now = (unsigned int)seconds*1000;
-        // if(mills_now - mills_o > SAMPLING_RATE){
+        // unsigned int mills_now = (unsigned int)seconds*1000;
+        // if((mills_now - mills_o) > SAMPLING_RATE){
         //     do_sample = true;
         //     mills_o =  (unsigned int)seconds*1000;
         // }
@@ -93,17 +93,16 @@ void gyro_actions(){
         //The total distance covered is the summation of the instantenous distances
         L=L+gL[w][0];
         printf(">Total Distance:%f\n",L);
-        if(do_sample){
-                printf(">Interger Distance:%d\n",Lint);
-                Lint = Lint +  (int)(14.3*L); //magic number for human gait
-                // do_sample = false;
-        }
-        if(start_status){
+        Lint = Lint +  (int)(14.3*L); //magic number for human gait
+        printf(">Interger Distance:%d\n",Lint);
+
+        if(do_sample){       
             HomeDisplay(Lint,L);
             x_int = (int)(5000.0*g2[w][0]);
             y_int = (int)(5000.0*g2[w][1]);
             z_int = (int)(5000.0*g2[w][2]);
             AddPoint((int)x_int,(int)y_int,(int)z_int,yy);
+            // do_sample = false;
         }
 
 
@@ -143,9 +142,12 @@ int main()
     init_filters();
     init_spi();
     gyro_thread.start(gyro_actions);
+    thread_sleep_for(1000);// DO SOMETHING WITH GYRO DATA
+    lcd_clear();
+
     while(1)
     {
-        thread_sleep_for(100);// DO SOMETHING WITH GYRO DATA
+        thread_sleep_for(10);// DO SOMETHING WITH GYRO DATA
     }
 
 }
