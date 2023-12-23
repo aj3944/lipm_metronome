@@ -138,7 +138,7 @@ void HomeDisplay(int L, float vel) {
         last_draw_graph = false;
     }
 }
-//int prev_x = 0,prev_y = 0,prev_z = 0;
+int prev_x = 0,prev_y = 0,prev_z = 0;
 
 void AddPoint(int x,int y,int z,int t){
     
