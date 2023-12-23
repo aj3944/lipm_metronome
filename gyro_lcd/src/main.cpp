@@ -38,11 +38,10 @@ void touch_actions(){
 }
 
 void gyro_actions(){
-    time_t seconds = time(NULL);   
-    unsigned int mills_o = (unsigned int)seconds*1000;
-    seconds = time(NULL);   
+    // time_t seconds = time(NULL);   
+    // unsigned int mills_o = (unsigned int)seconds*1000;
+    // seconds = time(NULL);   
     int x_int = 0,y_int = 0,z_int = 0;
-
     while(1)
     {
         // unsigned int mills_now = (unsigned int)seconds*1000;
@@ -93,7 +92,7 @@ void gyro_actions(){
         //The total distance covered is the summation of the instantenous distances
         L=L+gL[w][0];
         printf(">Total Distance:%f\n",L);
-        Lint = Lint +  (int)(23.9*L); //magic number for human gait
+        Lint = Lint +  (int)(43.9*L); //magic number for human gait
         if(!start_status){
             Lint = 0;
         }
@@ -130,7 +129,7 @@ void gyro_actions(){
             //Tune : Clear the Distance covered every 40*Tsample = 40 * M * 0.5/M = 20 seconds
             L=0;//Periodic Clearing of Accumulated Distance
         }
-        ThisThread::sleep_for(100ms);        
+        ThisThread::sleep_for(50ms);        
     }
 }
 
