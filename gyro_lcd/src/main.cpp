@@ -162,9 +162,10 @@ void gyro_actions(){
 		//The total distance covered is the summation of the instantenous distances
 		L= L + gL[w][0];
 		if (debugSwitch) {printf("Accumulated Distance After Adding current Disantce= L = %f\n", L );}
-		if (debugSwitch) {printf(">Total Distance L:%f\n",L);}
+		if (debugSwitch) {printf("Total Distance L:%f\n",L);}
 
-        Lint = Lint +  (int)(scalingCoefficient*L); //magic number for human gait
+        Lint = (int)(scalingCoefficient*L); //magic number for human gait
+		if (debugSwitch) {printf("Total Scaled Integer Distance L:%d\n",Lint);}
         
 		//Reset the distance 
 		if(!start_status){
@@ -188,6 +189,135 @@ void gyro_actions(){
         if(t==0){
             lcd_clear();
         }
+
+		//To satisfy the challenge requirements, on every 0.5 seconds , the circular buffers will rotate to the first element, at this time
+		//we will take the current filtered signals samples and keep them in a size 40-slower buffer
+		//we will i-pointer to rotate around the 40-samples slower buffers
+		if (w==0){
+			for (j=0 ; j<d ; j++){
+				gyroReadSlow[s][j]=gyroRead[w][j];
+				gyroSlow[s][j]=gyro[w][j];
+				g2Slow[s][j]=g2[w][j];
+				VSlow[s][j]=V[w][j];
+			}
+				VLinearSlow[s][0]=VLinear[w][0];
+				gLSlow[s][0]=gL[w][0];
+				
+				LSlow=LSlow+gLSlow[s][0];
+				if (debugSwitch){
+					printf("--Buffer Slow Gyro Readings float--\n");
+					printArr2dInt(&gyroReadSlow[0][0],40,d);
+				}
+			s=(s+1)%40;
+
+
+			if (debugSwitch3){
+			printf("--Pointers--\n");
+			printf("w=%d\t r=%d\t i=%d\t t=%d\n",w,r,s,t);
+
+			printf("--Buffer Gyro Readings float--\n");
+			printArr2dInt(&gyroRead[0][0],M,d);
+
+
+			printf("--Buffer Gyro Readings Converted and down scaled--\n");
+			printArr2d(&gyro[0][0],M,d);
+
+
+			printf("--Delayed Gyro Input to Filter--\n");
+			printArr2d(&a2[0][0],F2,d);
+			printf("--Trapezoidal Integrator Filter with Unit Window--\n");
+			printArr2d(&H2[0][0],F2,d);
+			printf("--Buffer Filtered Gyro Output Buffer--\n");
+			printArr2d(&g2[0][0],M,d);
+			
+			
+			printf("--Buffer 3D Linear Velocity instant in x,y,z--\n");
+			printArr2d(&V[0][0],M,d);
+			printf("--Buffer 1D Linear Velocity instant from corss product g2--\n");
+			printArr2d(&VLinear[0][0],M,1);
+
+			printf("--Delayed 1D Linear Velocity instant--\n");
+			printArr2d(&aL[0][0],FL,1);
+			printf("--Integrator Filter for 1D Linear Velocity--\n");
+			printArr2d(&HL[0][0],FL,1);
+
+			printf("--Buffer Distance from integrated 1D Linear Velocity--\n");
+			printArr2d(&gL[0][0],M,1);
+			printf("--Buffer Accumulated Distance--\n");
+			printf("L=%f",L);
+
+			printf("==========Printing Slow Buffers===========\n");
+			printf("--Slow Buffer Gyro Reading Buffers--\n");
+			printArr2dInt(&gyroReadSlow[0][0],40,d);
+			printf("--Slow Buffer Gyro Scaled--\n");
+			printArr2d(&gyroSlow[0][0],40,d);
+			//printf("--Slow Buffer Filtered Gyro Readings--\n");
+			//printArr2d(&g2Slow[0][0],40,d);
+			printf("--Slow Buffer Velocity in X,Y,Z--\n");
+			printArr2d(&VSlow[0][0],40,d);
+			printf("--Slow Buffer Linear Velocity Magnitude--\n");
+			printArr2d(&VLinearSlow[0][0],40,1);
+			printf("--Slow Buffer Integrated Instantaneous Distance--\n");
+			printArr2d(&gLSlow[0][0],40,1);
+			printf("--Slow Accumulated Distance--\n");
+			printf(">LSlow=%f",LSlow);
+    		}
+		
+
+		if (debugSwitch2){
+			printf(">write Pointer w:%d\n",w);
+			printf(">read Pointer r:%d\n",r);
+			printf(">write slow Pointer s:%d\n",s);
+			printf(">Tdelayf:%f\n",Tdelay);
+			printf(">Tdelayd:%d\n",Tdelay);
+			printf(">Ts2d:%d\n",Ts2);
+			printf(">Ts2f:%d\f",Ts2);
+			printf(">t sample:%d\n",t);
+			printf(">gyroRead_x:%d\n",gyroRead[w][0]);
+			printf(">gyroRead_y:%d\n",gyroRead[w][1]);
+			printf(">gyroRead_z:%d\n",gyroRead[w][2]);
+			printf(">gyro_x:%f\n",gyro[w][0]);
+			printf(">gyro_y:%f\n",gyro[w][1]);
+			printf(">gyro_z:%f\n",gyro[w][2]);
+			printf(">g2_x:%f\n",g2[w][0]);
+			printf(">g2_y:%f\n",g2[w][1]);
+			printf(">g2_z:%f\n",g2[w][2]);
+			//printf(">g3_x:%f\n",g3[w][0]);
+			//printf(">g3_y:%f\n",g3[w][1]);
+			//printf(">g3_z:%f\n",g3[w][2]);
+			printf(">V_x:%f\n",V[w][0]);
+			printf(">V_y:%f\n",V[w][1]);
+			printf(">V_z:%f\n",V[w][2]);
+			printf(">VLinear:%f\n",VLinear[w][0]);
+			printf(">L_instant:%f\n",gL[w][0]);
+			printf(">L_total:%f\n",L);
+			}
+
+		if (debugSwitch4){
+			printf(">gyroReadSlow_x:%d\n",gyroReadSlow[i][0]);
+			printf(">gyroReadSlow_y:%d\n",gyroReadSlow[i][1]);
+			printf(">gyroReadSlow_z:%d\n",gyroReadSlow[i][2]);
+			printf(">gyroSlow_x:%f\n",gyroSlow[i][0]);
+			printf(">gyroSlow_y:%f\n",gyroSlow[i][1]);
+			printf(">gyroSlow_z:%f\n",gyroSlow[i][2]);
+			// printf(">g2Slow_x:%f\n",g2Slow[i][0]);
+			//printf(">g2Slow_y:%f\n",g2Slow[i][1]);
+			//printf(">g2Slow_z:%f\n",g2Slow[i][2]);
+			printf(">VSlow_x:%f\n",VSlow[i][0]);
+			printf(">VSlow_y:%f\n",VSlow[i][1]);
+			printf(">VSlow_z:%f\n",VSlow[i][2]);
+			printf(">VLinearSlow:%f\n",VLinearSlow[i][0]);
+			printf(">L_instantSlow:%f\n",gLSlow[i][0]);
+			printf(">L_total_Slow:%f\n",LSlow);
+			}
+
+
+
+    }
+
+
+
+
         ThisThread::sleep_for(100ms);        
     }
 }

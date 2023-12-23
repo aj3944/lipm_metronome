@@ -61,7 +61,7 @@ float g1[M][d]={0}; //initialize filtered gyro buffer, output of dot product aft
 float W1[F1][d]; //initialize Blackman Window Coefficients
 */
 
-//For Trapezoidal integrator applied to the gyro scaled values
+//For Moving Average or Wide Integrator applied to the gyro scaled values
 float H2[F2][d]; //initialize Non-Windowed Filter Coefficients for integrator,  filter size is F2 that can <= M , in this example F2=M ==> have M-1 delays and 1 current
 float W2[F2][d]; //initialize Window Coefficients that will be used to "window" the filter coefficients to avoid abrupt truncation
 float a2[F2][d] = {0}; //initialize a buffer to keep the last (D2) samples + the current samples (x[n],x[n-1],..,x[n-(D1-1)]) to be used in integrator 
@@ -187,6 +187,19 @@ void integratorTrapezoidal( uint16_t f, uint16_t dim, float (*arr)[3]){
     }
 }
 
+
+void movingAverage( uint16_t f, uint16_t dim, float (*arr)[3]){
+    //fills in the array arr witha an f filter coefficients x dim dimensions trapezoidal filter for integrator, with Tsampling considered
+    //e.g. to generate a matrix arr with a 3rd order (4-delayed samples) x 3 dim filter ==> integratorTrapezoidal(4,3,&arr[0][0]) : 
+    //gives a 4x3 matrix where each column = Tsampling * [1/2, 1 , 1 , 1/2] for each dim
+    uint8_t i=0,j=0;
+        for (j=0; j<dim ; j++){
+            for (i=0 ; i<f ; i++){
+                arr[i][j]=(float) ((float)1/f) * Ts2; // Ts2 is multiplied to accomodate the sampling frequency
+        }
+    }
+}
+
 void integratorTrapezoidal1D( uint16_t f, uint16_t dim, float (*arr)[1]){
     //fills in the array arr witha an f filter coefficients 1 dim dimensions trapezoidal filter for integrator, with Tsampling considered
     //e.g. to generate a matrix arr with a 3rd order (4-delayed samples) x 1 dim filter ==> integratorTrapezoidal1D(4,1,&arr[0][0]) : 
@@ -239,6 +252,7 @@ void unitWindow( uint16_t f, uint16_t dim, float (*arr)[3]){
                 arr[i][j]=(float) 1;
         }
     }
+}
 
 void unitWindow1D( uint16_t f, uint16_t dim, float (*arr)[1]){
     //Used for debugging only, similar to unitWindow but for 1D , fills arr with unit window coefficients giving a fx1 all "1"s matrix , to
@@ -312,6 +326,20 @@ void init_filters(){
     
     // Prepare integrator for scaled gyro values,
     // H2 : Filter integrator coefficients, F2: the filter order+1 = size of filter , W2 : The Window Coefficients , all with size F2 * d matrices
+    movingAverage(F2,d,H2);
+    printf("--movingAverage Filter--\n");
+    printArr2d(&H2[0][0],F2,d);
+    blackmanWindow(F2,d,W2);
+    if (debugSwitch) {unitWindow(F2,d,W2);}
+    printf("--Blackman Window Coefficients for movingAverage--\n");
+    printArr2d(&W2[0][0],F2,d);
+    hadamardProduct(F2,d,W2,H2,H2);
+    printf("--movingAverage Filter with Blackman Window--\n");
+    printArr2d(&H2[0][0],F2,d);
+
+    /*
+    // Prepare integrator for scaled gyro values,
+    // H2 : Filter integrator coefficients, F2: the filter order+1 = size of filter , W2 : The Window Coefficients , all with size F2 * d matrices
     integratorTrapezoidal(F2,d,H2);
     printf("--Trapezoidal Integrator Filter--\n");
     printArr2d(&H2[0][0],F2,d);
@@ -322,6 +350,7 @@ void init_filters(){
     hadamardProduct(F2,d,W2,H2,H2);
     printf("--Trapezoidal Integrator Filter with Blackman Window--\n");
     printArr2d(&H2[0][0],F2,d);
+    */
 
     
     // Prepare integrator for Linear Velocity in 1 dimension,
