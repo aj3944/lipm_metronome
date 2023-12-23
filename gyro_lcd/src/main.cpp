@@ -14,7 +14,7 @@
 #define xLThreshold -500
 
 //Calibrate : Scaling factor to accomodate 
-#define scalingCoefficient 23.9
+#define scalingCoefficient 1
 
 
 /// TOUCH AND DRAW THEADS
@@ -75,7 +75,7 @@ void gyro_actions(){
 		//Scale Gyro readings into rad/sec
 		gyro[w][j] = ((float) gyroRead[w][j])*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
 
-		//Start Integration for a slice of the gyro samples with size F2 (D2 Delay elements + current sample,
+		//Start Integration or Moving Average for a slice of the gyro samples with size F2 (D2 Delay elements + current sample,
 		// For each dimension, integrate gyro[n],gyro[n-1],..,gyro[n-(F2-1)]
         //Slice a part of ciruclar buffer that matches filter size F2
 		v=D2;
@@ -106,7 +106,7 @@ void gyro_actions(){
        
 	   
 		if (d==3) {
-			//Tune: Use a function to do the cross product ; g (gyro filtered signal) X r (normalized or calibrated radius) = V (Linear Velocity in x,y,z)
+			//a function to do the cross product ; g (gyro filtered signal) X r (normalized or calibrated radius) = V (Linear Velocity in x,y,z)
 			//crossProduct3d(&g2[w][0] , &V[w][0]);
 			
 			//Equivalent to Cross product
@@ -157,15 +157,17 @@ void gyro_actions(){
 		if (debugSwitch) {printArr2d(&gL[0][0], M,1);} 
 		if (debugSwitch) {printf("===End Calculate Instantaneous Linear Distance Magnitude based on Integration of Linear Velocity Magnitude Array\n");}
 		
-		if (debugSwitch) {printf(">Instant Distance gL[%d][0]:%f\n",w, gL[w][0]);}
+		if (debugSwitch) {printf("Instant Distance gL[%d][0]=%f\n",w, gL[w][0]);}
 		if (debugSwitch) {printf("Accumulated Distance Before Adding current Disantce= L = %f\n", L );}
 		//The total distance covered is the summation of the instantenous distances
 		L= L + gL[w][0];
 		if (debugSwitch) {printf("Accumulated Distance After Adding current Disantce= L = %f\n", L );}
-		if (debugSwitch) {printf("Total Distance L:%f\n",L);}
+		if (debugSwitch) {printf("Total Distance L=%f\n",L);}
 
+		//Scale the distance to compensate for the normalized radius of a moving center, Tsampling in filter coefficients and,
+		//average human stride = 2-2.5 feet = 0.3-0.6 metres
         Lint = (int)(scalingCoefficient*L); //magic number for human gait
-		if (debugSwitch) {printf("Total Scaled Integer Distance L:%d\n",Lint);}
+		if (debugSwitch) {printf("Total Scaled Integer Distance L=%d\n",Lint);}
         
 		//Reset the distance 
 		if(!start_status){
@@ -260,7 +262,8 @@ void gyro_actions(){
 			printf("--Slow Buffer Integrated Instantaneous Distance--\n");
 			printArr2d(&gLSlow[0][0],40,1);
 			printf("--Slow Accumulated Distance--\n");
-			printf(">LSlow=%f",LSlow);
+			printf("LSlow=%f",LSlow);
+			printf("Interger Distance=%d\n",Lint);
     		}
 		
 
@@ -291,6 +294,7 @@ void gyro_actions(){
 			printf(">VLinear:%f\n",VLinear[w][0]);
 			printf(">L_instant:%f\n",gL[w][0]);
 			printf(">L_total:%f\n",L);
+			printf(">L_total_int=%d\n",Lint);
 			}
 
 		if (debugSwitch4){

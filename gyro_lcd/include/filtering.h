@@ -14,7 +14,7 @@
 //Pointers will be updated as ; w=(w+1)%M and r=(r+1)%M
 //If we need to extract samples with Di delays, then we need Di+1 = Fi coefficients, so we need Fi samples = x[n],x[n-1],...x[n-(Di-1)] ,
 //So we can use the same buffer but with counter to the initial read pointer from k=r+(D-Di) till k=r+(D-Di)+Fi .
-#define M 16 
+#define M 32 
 #define F (M) //Supported Filter Coefficients , Number of Filter coefficients= (M-1) Delayed samples + 1 current , Fmax = M 
 #define D (M-1) //Supported Delayed Coefficients , The filter order 
 
@@ -82,7 +82,7 @@ float L=0, vL2=0 ; //Total Distance , and Linear Velocity Squared accumulator
 int Lint = 0; 
 
 //s for gyro readings counter to fill the slow buffer , j for dimension counter x,y and z , k for filter coefficients counter, t for sample number
-uint8_t i=0,j=0,k=0, t=0; 
+uint8_t i=0,j=0,k=0, t=0, s=0; 
 uint16_t w=0, r=(M+w-D)%M , v=0;
 
 
@@ -337,7 +337,7 @@ void init_filters(){
     printf("--movingAverage Filter with Blackman Window--\n");
     printArr2d(&H2[0][0],F2,d);
 
-    /*
+    /* Alternative to Moving Average : Use a wide-trapezoidal integrator
     // Prepare integrator for scaled gyro values,
     // H2 : Filter integrator coefficients, F2: the filter order+1 = size of filter , W2 : The Window Coefficients , all with size F2 * d matrices
     integratorTrapezoidal(F2,d,H2);
