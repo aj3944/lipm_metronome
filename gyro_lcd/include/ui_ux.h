@@ -1,6 +1,5 @@
 #include "mbed.h"
-//Unused Variable
-//int led_init = 0;
+int led_init = 0;
 // location and dimensions of start button
 #define START_X 10
 #define START_Y 10
@@ -17,14 +16,12 @@ LCD_DISCO_F429ZI lcd;
 TS_DISCO_F429ZI ts;
 
 
-//Unused Variable
-//bool start_status = false;
-//bool stats_status = false;
+bool start_status = false;
+bool stats_status = false;
 
 
 
-//Unused Variable
-//bool last_draw_graph = false;
+bool last_draw_graph = false;
 
 
 void DrawButtons() {
